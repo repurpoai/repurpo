@@ -1,0 +1,53 @@
+user-first-ai-content-repurposer/
+├─ app/
+│  ├─ auth/
+│  │  └─ actions.ts
+│  ├─ dashboard/
+│  │  ├─ _components/
+│  │  │  └─ dashboard-generator.tsx
+│  │  ├─ actions.ts
+│  │  └─ page.tsx
+│  ├─ history/
+│  │  └─ page.tsx
+│  ├─ login/
+│  │  ├─ login-form.tsx
+│  │  └─ page.tsx
+│  ├─ pricing/
+│  │  └─ page.tsx
+│  ├─ signup/
+│  │  ├─ page.tsx
+│  │  └─ signup-form.tsx
+│  ├─ globals.css
+│  ├─ layout.tsx
+│  └─ page.tsx
+├─ components/
+│  ├─ copy-button.tsx
+│  ├─ export-button.tsx
+│  ├─ plan-badge.tsx
+│  ├─ sidebar.tsx
+│  └─ ui/
+│     ├─ button.tsx
+│     ├─ card.tsx
+│     ├─ input.tsx
+│     └─ textarea.tsx
+├─ lib/
+│  ├─ supabase/
+│  │  ├─ client.ts
+│  │  ├─ middleware.ts
+│  │  └─ server.ts
+│  ├─ extract-article.ts
+│  ├─ gemini.ts
+│  ├─ plans.ts
+│  ├─ utils.ts
+│  └─ viewer.ts
+├─ supabase/
+│  └─ schema.sql
+├─ .env.example
+├─ eslint.config.mjs
+├─ middleware.ts
+├─ next-env.d.ts
+├─ next.config.ts
+├─ package.json
+├─ postcss.config.js
+├─ tailwind.config.ts
+└─ tsconfig.json

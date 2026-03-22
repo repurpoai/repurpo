@@ -1,0 +1,88 @@
+11. setup instructions
+Use Supabase’s SSR package pattern for Next.js App Router, with cookie-based server/browser clients and middleware-based session refresh. Supabase’s current SSR docs recommend @supabase/ssr for this flow. Gemini’s structured output docs support JSON Schema-constrained responses, which is what the prompt layer here uses for reliable parsing. �
+Supabase +1
+Fill these env variables
+NEXT_PUBLIC_SUPABASE_URL
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+GEMINI_API_KEY
+GEMINI_MODEL
+NEXT_PUBLIC_PRO_UPGRADE_URL
+What NEXT_PUBLIC_PRO_UPGRADE_URL does
+All upgrade CTAs in the UI point to this URL.
+Examples:
+Stripe checkout link
+Lemon Squeezy checkout link
+billing portal link
+sales/contact page
+If you do not set it, the app still works, but upgrade buttons will fall back to the pricing page.
+Supabase setup
+Create a Supabase project.
+Open SQL Editor.
+Paste the full contents of supabase/schema.sql.
+Run it.
+In Project Settings → API, copy:
+Project URL
+Publishable key
+In Authentication → Providers → Email, keep email/password enabled.
+Disable Confirm Email if you want signup to immediately land in the dashboard without email verification. Supabase’s current Next.js auth quickstart uses the App Router flow and email/password provider configuration for this setup. �
+Supabase +1
+How Free vs Pro works in this build
+New users start on Free
+Free users get:
+tier = 'free'
+monthly_generation_limit = 5
+Pro users should have:
+tier = 'pro'
+monthly_generation_limit = null
+billing_status = 'active'
+Manual upgrade SQL for testing Pro
+Run this in Supabase SQL Editor:
+SQL
+update public.profiles
+set
+  tier = 'pro',
+  monthly_generation_limit = null,
+  billing_status = 'active'
+where email = 'user@example.com';
+Gemini setup
+Create the API key in Google AI Studio and place it in GEMINI_API_KEY. Google’s current Gemini docs say API keys are created and managed in AI Studio, and structured JSON outputs are supported through JSON Schema configuration. �
+Google AI for Developers +1
+Model recommendation
+The default model in this codebase is gemini-2.5-flash, which is stable and has a current free-tier entry on Google’s pricing page. Google’s pricing docs also show other free-tier-capable Flash / Flash-Lite models if you want to swap later. �
+Google AI for Developers
+12. run instructions
+exact npm install command
+Bash
+npm install
+exact local env step
+Create .env.local and paste:
+Environment
+NEXT_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your-supabase-publishable-or-anon-key
+GEMINI_API_KEY=your-google-ai-studio-api-key
+GEMINI_MODEL=gemini-2.5-flash
+NEXT_PUBLIC_PRO_UPGRADE_URL=https://your-checkout-or-billing-url.com
+exact local run command
+Bash
+npm run dev
+open locally
+Plain text
+http://localhost:3000
+exact Vercel deploy steps
+Push the project to GitHub
+Import the repo into Vercel
+Add the same environment variables in Vercel Project Settings
+Deploy
+Or deploy from CLI:
+Bash
+npm i -g vercel
+vercel --prod
+Vercel’s Hobby plan is currently the free plan for personal/small-scale apps, and Supabase’s pricing page still includes a free plan suitable for starter builds. �
+Vercel +1
+exact production note
+This app is already wired for:
+plan-aware UI locks
+server-enforced monthly usage caps
+DB tier tracking
+pricing page
+upgrade CTA routing
