@@ -5,7 +5,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { extractArticleFromUrl } from "@/lib/extract-article";
 import { generateRepurposedContent } from "@/lib/gemini";
-import { canUseTone, getMonthRange, TONES, type ContentTone, type PlanTier } from "@/lib/plans";
+import { canUseTone, TONES, type ContentTone, type PlanTier } from "@/lib/plans";
 import { countWords, sanitizeSourceText } from "@/lib/utils";
 import { getViewerContext } from "@/lib/viewer";
 
