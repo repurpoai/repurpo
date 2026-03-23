@@ -94,18 +94,28 @@ function extractResponseText(response: unknown) {
   return partsText;
 }
 
-function parseStructuredJson(raw: string) {
-  const attempts: string[] = [raw];
+function cleanJsonCandidate(raw: string) {
+  return raw
+    .trim()
+    .replace(/^```json\s*/i, "")
+    .replace(/^```\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
+}
 
-  const fencedMatch = raw.match(/```(?:json)?\s*([\s\S]*?)```/i);
+function parseStructuredJson(raw: string) {
+  const cleaned = cleanJsonCandidate(raw);
+  const attempts: string[] = [cleaned];
+
+  const fencedMatch = cleaned.match(/```(?:json)?\s*([\s\S]*?)```/i);
   if (fencedMatch?.[1]) {
-    attempts.push(fencedMatch[1]);
+    attempts.push(cleanJsonCandidate(fencedMatch[1]));
   }
 
-  const firstBrace = raw.indexOf("{");
-  const lastBrace = raw.lastIndexOf("}");
+  const firstBrace = cleaned.indexOf("{");
+  const lastBrace = cleaned.lastIndexOf("}");
   if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-    attempts.push(raw.slice(firstBrace, lastBrace + 1));
+    attempts.push(cleanJsonCandidate(cleaned.slice(firstBrace, lastBrace + 1)));
   }
 
   for (const attempt of attempts) {
@@ -118,15 +128,13 @@ function parseStructuredJson(raw: string) {
   throw new Error("The model returned malformed JSON.");
 }
 
-export async function generateRepurposedContent(input: {
+function buildPrompt(input: {
   sourceTitle: string;
   sourceText: string;
   tone: ContentTone;
+  retryMode?: boolean;
 }) {
-  const client = getClient();
-  const model = getModelName();
-
-  const prompt = `
+  return `
 You are a content repurposing editor.
 
 Your job is to transform one source into three distinct outputs:
@@ -145,8 +153,9 @@ Non-negotiable source fidelity rules:
 - If the source is limited, keep the output limited instead of guessing.
 
 Formatting rules:
-- Return JSON only.
+- Return exactly one valid JSON object.
 - No markdown code fences.
+- No explanation before or after JSON.
 - No extra keys.
 - Each field must be plain text.
 
@@ -177,20 +186,38 @@ newsletter:
 - Include a "Why it matters" style angle if supported by the source
 - Must feel native to newsletters
 
+${
+  input.retryMode
+    ? `Important retry instruction:
+Your previous answer was not valid JSON.
+Return only a single valid JSON object now.`
+    : ""
+}
+
 Source title:
 ${input.sourceTitle}
 
 Source text:
 ${limitCharacters(input.sourceText, 22000)}
   `.trim();
+}
+
+async function requestGeneration(input: {
+  sourceTitle: string;
+  sourceText: string;
+  tone: ContentTone;
+  retryMode?: boolean;
+}) {
+  const client = getClient();
+  const model = getModelName();
 
   const response = await client.models.generateContent({
     model,
-    contents: prompt,
+    contents: buildPrompt(input),
     config: {
       responseMimeType: "application/json",
       responseJsonSchema: repurposedContentJsonSchema,
-      temperature: 0.6,
+      temperature: input.retryMode ? 0.2 : 0.5,
       maxOutputTokens: 2800
     }
   });
@@ -207,4 +234,23 @@ ${limitCharacters(input.sourceText, 22000)}
     ...parsed,
     modelName: model
   };
+}
+
+export async function generateRepurposedContent(input: {
+  sourceTitle: string;
+  sourceText: string;
+  tone: ContentTone;
+}) {
+  try {
+    return await requestGeneration(input);
+  } catch (error) {
+    if (error instanceof Error && error.message === "The model returned malformed JSON.") {
+      return await requestGeneration({
+        ...input,
+        retryMode: true
+      });
+    }
+
+    throw error;
+  }
 }
