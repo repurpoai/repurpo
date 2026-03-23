@@ -18,6 +18,7 @@ import {
 import { generateContentAction, type GenerationFormState } from "@/app/dashboard/actions";
 import { CopyButton } from "@/components/copy-button";
 import { ExportButton } from "@/components/export-button";
+import { OpenInAppButton } from "@/components/open-in-app-button";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -580,14 +581,7 @@ export function DashboardGenerator({
                     </CardTitle>
                     <CardDescription>{PLATFORM_META[platform].description}</CardDescription>
                   </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <CopyButton text={textValue} label="Copy" />
-                    <ExportButton
-                      text={textValue}
-                      filename={`${platform}.txt`}
-                      disabled={!imageUnlocked}
-                    />
-                  </div>
+                  
                 </CardHeader>
                 <CardContent>
                   <div className="whitespace-pre-wrap text-sm leading-7 text-slate-700">
@@ -601,6 +595,22 @@ export function DashboardGenerator({
           <Card className="border-0 bg-white shadow-soft">
             <CardHeader className="flex flex-row items-start justify-between gap-4">
               <div className="space-y-1">
+             <div className="flex flex-wrap items-center gap-2">
+  <CopyButton text={textValue} label="Copy" />
+  <ExportButton
+    text={textValue}
+    filename={`${platform}.txt`}
+    disabled={!imageUnlocked}
+  />
+  {platform !== "newsletter" ? (
+    <OpenInAppButton
+      platform={platform}
+      text={textValue}
+      sourceTitle={state.data?.sourceTitle}
+      imageUrl={imageUrl}
+    />
+  ) : null}
+</div>
                 <CardTitle className="flex items-center gap-2">
                   <FileImage className="h-5 w-5" />
                   Matching image
