@@ -4,12 +4,22 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { extractArticleFromUrl } from "@/lib/extract-article";
-import { generateRepurposedContent } from "@/lib/gemini";
-import { canUseTone, TONES, type ContentTone, type PlanTier } from "@/lib/plans";
+import { generateRepurposedContent, type PlatformOutputs } from "@/lib/gemini";
+import {
+  canUseTone,
+  CONTENT_PLATFORMS,
+  LENGTH_PRESETS,
+  TONES,
+  type ContentPlatform,
+  type ContentTone,
+  type LengthPreset,
+  type PlanTier
+} from "@/lib/plans";
 import { countWords, sanitizeSourceText } from "@/lib/utils";
 import { getViewerContext } from "@/lib/viewer";
+import { extractYouTubeTranscript } from "@/lib/youtube";
 
-type InputMode = "link" | "text";
+type InputMode = "link" | "text" | "youtube";
 
 type UsageState = {
   tier: PlanTier;
@@ -25,11 +35,11 @@ export type GenerationFormState = {
   data: {
     inputMode: InputMode;
     tone: ContentTone;
+    lengthPreset: LengthPreset;
     sourceTitle: string;
     sourceUrl: string | null;
-    linkedinPost: string;
-    twitterThread: string;
-    newsletter: string;
+    outputs: PlatformOutputs;
+    selectedPlatforms: ContentPlatform[];
   } | null;
   usage: UsageState | null;
 };
@@ -54,6 +64,8 @@ const textSchema = z
   });
 
 const toneSchema = z.enum(TONES);
+const lengthSchema = z.enum(LENGTH_PRESETS);
+const platformsSchema = z.array(z.enum(CONTENT_PLATFORMS)).min(1, "Select at least one platform.");
 
 export async function generateContentAction(
   _: GenerationFormState,
@@ -70,15 +82,42 @@ export async function generateContentAction(
     };
   }
 
-  const mode = formData.get("mode") === "link" ? "link" : "text";
+  const mode = formData.get("mode") === "youtube"
+    ? "youtube"
+    : formData.get("mode") === "link"
+    ? "link"
+    : "text";
 
   const toneParse = toneSchema.safeParse(formData.get("tone"));
   const tone = toneParse.success ? toneParse.data : "professional";
 
+  const lengthParse = lengthSchema.safeParse(formData.get("lengthPreset"));
+  const lengthPreset = lengthParse.success ? lengthParse.data : "medium";
+
+  const selectedPlatformsRaw = formData.getAll("platforms").map(String);
+  const platformsParse = platformsSchema.safeParse(selectedPlatformsRaw);
+
+  if (!platformsParse.success) {
+    return {
+      success: false,
+      error: platformsParse.error.issues[0]?.message ?? "Select at least one platform.",
+      data: null,
+      usage: {
+        tier: viewer.tier,
+        usedThisMonth: viewer.usedThisMonth,
+        monthlyLimit: viewer.monthlyLimit,
+        remainingThisMonth: viewer.remainingThisMonth,
+        usageWindowLabel: viewer.usageWindowLabel
+      }
+    };
+  }
+
+  const selectedPlatforms = platformsParse.data;
+
   if (!canUseTone(viewer.tier, tone)) {
     return {
       success: false,
-      error: "That tone is available on Pro only.",
+      error: "That tone is available on paid plans only.",
       data: null,
       usage: {
         tier: viewer.tier,
@@ -93,7 +132,7 @@ export async function generateContentAction(
   if (viewer.monthlyLimit !== null && viewer.usedThisMonth >= viewer.monthlyLimit) {
     return {
       success: false,
-      error: "You have reached your monthly Free plan limit. Upgrade to Pro for unlimited generations.",
+      error: "You have reached your monthly Free plan limit. Upgrade to continue generating.",
       data: null,
       usage: {
         tier: viewer.tier,
@@ -108,6 +147,7 @@ export async function generateContentAction(
   let sourceTitle = "";
   let sourceUrl: string | null = null;
   let sourceText = "";
+  let sourceMeta: Record<string, unknown> = {};
 
   if (mode === "link") {
     const parsedUrl = urlSchema.safeParse(formData.get("url"));
@@ -132,6 +172,7 @@ export async function generateContentAction(
       sourceTitle = article.title;
       sourceUrl = article.url;
       sourceText = article.text;
+      sourceMeta = { kind: "article" };
     } catch (error) {
       return {
         success: false,
@@ -139,6 +180,47 @@ export async function generateContentAction(
           error instanceof Error
             ? error.message
             : "Could not extract readable content from that URL.",
+        data: null,
+        usage: {
+          tier: viewer.tier,
+          usedThisMonth: viewer.usedThisMonth,
+          monthlyLimit: viewer.monthlyLimit,
+          remainingThisMonth: viewer.remainingThisMonth,
+          usageWindowLabel: viewer.usageWindowLabel
+        }
+      };
+    }
+  } else if (mode === "youtube") {
+    const parsedUrl = urlSchema.safeParse(formData.get("youtubeUrl"));
+
+    if (!parsedUrl.success) {
+      return {
+        success: false,
+        error: parsedUrl.error.issues[0]?.message ?? "Enter a valid YouTube URL.",
+        data: null,
+        usage: {
+          tier: viewer.tier,
+          usedThisMonth: viewer.usedThisMonth,
+          monthlyLimit: viewer.monthlyLimit,
+          remainingThisMonth: viewer.remainingThisMonth,
+          usageWindowLabel: viewer.usageWindowLabel
+        }
+      };
+    }
+
+    try {
+      const video = await extractYouTubeTranscript(parsedUrl.data);
+      sourceTitle = video.title;
+      sourceUrl = video.url;
+      sourceText = video.text;
+      sourceMeta = video.sourceMeta;
+    } catch (error) {
+      return {
+        success: false,
+        error:
+          error instanceof Error
+            ? error.message
+            : "Could not fetch a usable YouTube transcript.",
         data: null,
         usage: {
           tier: viewer.tier,
@@ -169,13 +251,16 @@ export async function generateContentAction(
 
     sourceTitle = "Manual text input";
     sourceText = parsedText.data;
+    sourceMeta = { kind: "manual" };
   }
 
   try {
     const generated = await generateRepurposedContent({
       sourceTitle,
       sourceText,
-      tone
+      tone,
+      lengthPreset,
+      platforms: selectedPlatforms
     });
 
     const supabase = await createClient();
@@ -184,17 +269,22 @@ export async function generateContentAction(
       user_id: viewer.userId,
       input_mode: mode,
       tone,
+      length_preset: lengthPreset,
       source_url: sourceUrl,
       source_title: sourceTitle,
       source_text: sourceText,
-      linkedin_post: generated.linkedin_post,
-      twitter_thread: generated.twitter_thread,
-      newsletter: generated.newsletter,
+      source_meta: sourceMeta,
+      selected_platforms: selectedPlatforms,
+      outputs: generated.outputs,
+      linkedin_post: generated.outputs.linkedin ?? "",
+      twitter_thread: generated.outputs.x ?? "",
+      newsletter: generated.outputs.newsletter ?? "",
       model_name: generated.modelName
     });
 
     revalidatePath("/history");
     revalidatePath("/dashboard");
+    revalidatePath("/profile");
 
     const usedThisMonth = insertError ? viewer.usedThisMonth : viewer.usedThisMonth + 1;
     const remainingThisMonth =
@@ -208,11 +298,11 @@ export async function generateContentAction(
       data: {
         inputMode: mode,
         tone,
+        lengthPreset,
         sourceTitle,
         sourceUrl,
-        linkedinPost: generated.linkedin_post,
-        twitterThread: generated.twitter_thread,
-        newsletter: generated.newsletter
+        outputs: generated.outputs,
+        selectedPlatforms
       },
       usage: {
         tier: viewer.tier,
@@ -239,4 +329,4 @@ export async function generateContentAction(
       }
     };
   }
-            }
+}

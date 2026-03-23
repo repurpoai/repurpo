@@ -4,28 +4,41 @@ import {
   FileText,
   History as HistoryIcon,
   Link2,
-  Megaphone
+  Megaphone,
+  MessageSquareQuote,
+  Newspaper
 } from "lucide-react";
 import { CopyButton } from "@/components/copy-button";
 import { ExportButton } from "@/components/export-button";
 import { Sidebar } from "@/components/sidebar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { TONE_META, type ContentTone } from "@/lib/plans";
+import { PLATFORM_META, TONE_META, type ContentPlatform, type ContentTone, type LengthPreset } from "@/lib/plans";
 import { formatDateTime, getSourceLabel, slugify } from "@/lib/utils";
 import { getViewerContext } from "@/lib/viewer";
 import { createClient } from "@/lib/supabase/server";
 
 type GenerationRecord = {
   id: string;
-  input_mode: "link" | "text";
+  input_mode: "link" | "text" | "youtube";
   tone: ContentTone;
+  length_preset: LengthPreset;
   source_url: string | null;
   source_title: string | null;
   source_text: string;
+  selected_platforms: ContentPlatform[] | null;
+  outputs: Record<string, string> | null;
   linkedin_post: string;
   twitter_thread: string;
   newsletter: string;
   created_at: string;
+};
+
+const platformIcons: Record<ContentPlatform, React.ComponentType<{ className?: string }>> = {
+  linkedin: Megaphone,
+  x: Link2,
+  instagram: FileText,
+  reddit: MessageSquareQuote,
+  newsletter: Newspaper
 };
 
 export default async function HistoryPage() {
@@ -41,7 +54,7 @@ export default async function HistoryPage() {
   const { data, error } = await supabase
     .from("generations")
     .select(
-      "id, input_mode, tone, source_url, source_title, source_text, linkedin_post, twitter_thread, newsletter, created_at"
+      "id, input_mode, tone, length_preset, source_url, source_title, source_text, selected_platforms, outputs, linkedin_post, twitter_thread, newsletter, created_at"
     )
     .order("created_at", { ascending: false });
 
@@ -71,29 +84,29 @@ export default async function HistoryPage() {
                 <HistoryIcon className="h-4 w-4" />
                 My history
               </div>
-              <CardTitle className="text-3xl">Your saved generations</CardTitle>
+              <CardTitle className="text-3xl text-white">Your saved generations</CardTitle>
               <CardDescription className="text-slate-300">
-                Each record belongs only to the account that created it.
+                Multi-platform outputs are saved per run.
               </CardDescription>
             </CardHeader>
           </Card>
 
-          {!viewer.isPro ? (
+          {!viewer.isPaid ? (
             <Card className="border-0 bg-white shadow-soft">
               <CardContent className="flex flex-col gap-3 py-6 lg:flex-row lg:items-center lg:justify-between">
                 <div className="space-y-1">
                   <p className="text-sm font-medium text-slate-900">
-                    Copy is included on Free. Direct export and advanced tones are Pro features.
+                    Export and image workflows are reserved for paid plans.
                   </p>
                   <p className="text-sm text-slate-500">
-                    Upgrade to unlock export buttons and the Casual, Viral, and Authority tones.
+                    Upgrade to Plus or Pro to unlock image generation and export tools.
                   </p>
                 </div>
                 <a
                   href={upgradeHref}
                   className="inline-flex h-11 items-center justify-center rounded-xl bg-slate-950 px-4 text-sm font-medium text-white transition hover:bg-slate-800"
                 >
-                  Upgrade to Pro
+                  Upgrade
                 </a>
               </CardContent>
             </Card>
@@ -116,6 +129,20 @@ export default async function HistoryPage() {
                 const sourceLabel = getSourceLabel(record.source_title, record.source_url);
                 const fileBase = slugify(sourceLabel || "generation");
 
+                const dynamicOutputs =
+                  record.outputs && Object.keys(record.outputs).length > 0
+                    ? (record.outputs as Partial<Record<ContentPlatform, string>>)
+                    : ({
+                        linkedin: record.linkedin_post || undefined,
+                        x: record.twitter_thread || undefined,
+                        newsletter: record.newsletter || undefined
+                      } as Partial<Record<ContentPlatform, string>>);
+
+                const selectedPlatforms =
+                  record.selected_platforms && record.selected_platforms.length > 0
+                    ? record.selected_platforms
+                    : (Object.keys(dynamicOutputs) as ContentPlatform[]);
+
                 return (
                   <Card key={record.id} className="border-0 bg-white shadow-soft">
                     <CardHeader className="gap-4">
@@ -127,7 +154,10 @@ export default async function HistoryPage() {
                               {record.input_mode}
                             </span>
                             <span className="rounded-full bg-slate-100 px-3 py-1">
-                              {TONE_META[record.tone].label}
+                              {TONE_META[record.tone]?.label ?? record.tone}
+                            </span>
+                            <span className="rounded-full bg-slate-100 px-3 py-1 capitalize">
+                              {record.length_preset}
                             </span>
                             <span>{formatDateTime(record.created_at)}</span>
                           </div>
@@ -147,89 +177,34 @@ export default async function HistoryPage() {
                     </CardHeader>
 
                     <CardContent className="space-y-6">
-                      <section className="space-y-3">
-                        <div className="flex items-start justify-between gap-4">
-                          <h3 className="flex items-center gap-2 text-base font-semibold text-slate-900">
-                            <Megaphone className="h-4 w-4" />
-                            LinkedIn post
-                          </h3>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <CopyButton text={record.linkedin_post} label="Copy" />
-                            <ExportButton
-                              text={record.linkedin_post}
-                              filename={`${fileBase}-linkedin.txt`}
-                              disabled={!viewer.isPro}
-                            />
-                            {!viewer.isPro ? (
-                              <a
-                                href={upgradeHref}
-                                className="text-xs font-medium text-slate-900 underline underline-offset-4"
-                              >
-                                Unlock export
-                              </a>
-                            ) : null}
-                          </div>
-                        </div>
-                        <div className="whitespace-pre-wrap rounded-2xl bg-slate-50 p-4 text-sm leading-7 text-slate-700">
-                          {record.linkedin_post}
-                        </div>
-                      </section>
+                      {selectedPlatforms.map((platform) => {
+                        const text = dynamicOutputs[platform];
+                        if (!text) return null;
 
-                      <section className="space-y-3">
-                        <div className="flex items-start justify-between gap-4">
-                          <h3 className="flex items-center gap-2 text-base font-semibold text-slate-900">
-                            <Link2 className="h-4 w-4" />
-                            Twitter/X thread
-                          </h3>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <CopyButton text={record.twitter_thread} label="Copy" />
-                            <ExportButton
-                              text={record.twitter_thread}
-                              filename={`${fileBase}-thread.txt`}
-                              disabled={!viewer.isPro}
-                            />
-                            {!viewer.isPro ? (
-                              <a
-                                href={upgradeHref}
-                                className="text-xs font-medium text-slate-900 underline underline-offset-4"
-                              >
-                                Unlock export
-                              </a>
-                            ) : null}
-                          </div>
-                        </div>
-                        <div className="whitespace-pre-wrap rounded-2xl bg-slate-50 p-4 text-sm leading-7 text-slate-700">
-                          {record.twitter_thread}
-                        </div>
-                      </section>
+                        const Icon = platformIcons[platform] ?? FileText;
 
-                      <section className="space-y-3">
-                        <div className="flex items-start justify-between gap-4">
-                          <h3 className="flex items-center gap-2 text-base font-semibold text-slate-900">
-                            <FileText className="h-4 w-4" />
-                            Newsletter
-                          </h3>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <CopyButton text={record.newsletter} label="Copy" />
-                            <ExportButton
-                              text={record.newsletter}
-                              filename={`${fileBase}-newsletter.txt`}
-                              disabled={!viewer.isPro}
-                            />
-                            {!viewer.isPro ? (
-                              <a
-                                href={upgradeHref}
-                                className="text-xs font-medium text-slate-900 underline underline-offset-4"
-                              >
-                                Unlock export
-                              </a>
-                            ) : null}
-                          </div>
-                        </div>
-                        <div className="whitespace-pre-wrap rounded-2xl bg-slate-50 p-4 text-sm leading-7 text-slate-700">
-                          {record.newsletter}
-                        </div>
-                      </section>
+                        return (
+                          <section key={platform} className="space-y-3">
+                            <div className="flex items-start justify-between gap-4">
+                              <h3 className="flex items-center gap-2 text-base font-semibold text-slate-900">
+                                <Icon className="h-4 w-4" />
+                                {PLATFORM_META[platform].label}
+                              </h3>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <CopyButton text={text} label="Copy" />
+                                <ExportButton
+                                  text={text}
+                                  filename={`${fileBase}-${platform}.txt`}
+                                  disabled={!viewer.isPaid}
+                                />
+                              </div>
+                            </div>
+                            <div className="whitespace-pre-wrap rounded-2xl bg-slate-50 p-4 text-sm leading-7 text-slate-700">
+                              {text}
+                            </div>
+                          </section>
+                        );
+                      })}
 
                       <details className="rounded-2xl border border-slate-200 bg-white">
                         <summary className="cursor-pointer list-none px-4 py-3 text-sm font-medium text-slate-900">

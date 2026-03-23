@@ -1,14 +1,19 @@
 "use client";
 
-import { useActionState, useMemo, useState } from "react";
+import Script from "next/script";
+import { useActionState, useEffect, useMemo, useState } from "react";
 import {
   CheckCircle2,
   Crown,
+  FileImage,
   FileText,
   Link2,
   LoaderCircle,
   Lock,
   Megaphone,
+  MessageSquareQuote,
+  Newspaper,
+  PlaySquare,
   WandSparkles
 } from "lucide-react";
 import { generateContentAction, type GenerationFormState } from "@/app/dashboard/actions";
@@ -18,12 +23,37 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { TONE_META, type ContentTone, type PlanTier } from "@/lib/plans";
+import {
+  LENGTH_META,
+  PLATFORM_META,
+  TONE_META,
+  isImageUnlocked,
+  type ContentPlatform,
+  type ContentTone,
+  type LengthPreset,
+  type PlanTier
+} from "@/lib/plans";
 
 const TEXT_LIMIT = 5000;
+
 const toneOptions = Object.entries(TONE_META) as Array<
   [ContentTone, (typeof TONE_META)[ContentTone]]
 >;
+
+const lengthOptions = Object.entries(LENGTH_META) as Array<
+  [LengthPreset, (typeof LENGTH_META)[LengthPreset]]
+>;
+
+const platformOptions = Object.entries(PLATFORM_META) as Array<
+  [ContentPlatform, (typeof PLATFORM_META)[ContentPlatform]]
+>;
+
+const initialGenerationFormState: GenerationFormState = {
+  success: false,
+  error: null,
+  data: null,
+  usage: null
+};
 
 type DashboardGeneratorProps = {
   tier: PlanTier;
@@ -34,11 +64,12 @@ type DashboardGeneratorProps = {
   upgradeHref: string;
 };
 
-const initialGenerationFormState: GenerationFormState = {
-  success: false,
-  error: null,
-  data: null,
-  usage: null
+const platformIcons: Record<ContentPlatform, React.ComponentType<{ className?: string }>> = {
+  linkedin: Megaphone,
+  x: Link2,
+  instagram: FileText,
+  reddit: MessageSquareQuote,
+  newsletter: Newspaper
 };
 
 export function DashboardGenerator({
@@ -49,10 +80,23 @@ export function DashboardGenerator({
   usageWindowLabel,
   upgradeHref
 }: DashboardGeneratorProps) {
-  const [mode, setMode] = useState<"link" | "text">("link");
+  const [mode, setMode] = useState<"link" | "text" | "youtube">("link");
   const [tone, setTone] = useState<ContentTone>("professional");
+  const [lengthPreset, setLengthPreset] = useState<LengthPreset>("medium");
+  const [selectedPlatforms, setSelectedPlatforms] = useState<ContentPlatform[]>([
+    "linkedin",
+    "x",
+    "newsletter"
+  ]);
+
   const [url, setUrl] = useState("");
+  const [youtubeUrl, setYoutubeUrl] = useState("");
   const [text, setText] = useState("");
+
+  const [imagePrompt, setImagePrompt] = useState("");
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [imageError, setImageError] = useState<string | null>(null);
+  const [imageLoading, setImageLoading] = useState(false);
 
   const [state, formAction, pending] = useActionState(
     generateContentAction,
@@ -69,6 +113,7 @@ export function DashboardGenerator({
 
   const currentTier = usage.tier;
   const atLimit = usage.monthlyLimit !== null && usage.usedThisMonth >= usage.monthlyLimit;
+  const imageUnlocked = isImageUnlocked(currentTier);
 
   const wordCount = useMemo(() => {
     const value = text.trim();
@@ -81,20 +126,84 @@ export function DashboardGenerator({
       ? 0
       : Math.min((usage.usedThisMonth / usage.monthlyLimit) * 100, 100);
 
+  function togglePlatform(platform: ContentPlatform) {
+    setSelectedPlatforms((current) =>
+      current.includes(platform)
+        ? current.filter((item) => item !== platform)
+        : [...current, platform]
+    );
+  }
+
+  useEffect(() => {
+    if (!state.data) return;
+
+    const seed =
+      state.data.outputs.instagram ??
+      state.data.outputs.linkedin ??
+      state.data.outputs.x ??
+      state.data.outputs.newsletter ??
+      state.data.outputs.reddit ??
+      "";
+
+    const compactSeed = seed.replace(/\s+/g, " ").trim().slice(0, 260);
+
+    setImagePrompt(
+      `Create a clean modern social media visual inspired by "${state.data.sourceTitle}". Tone: ${state.data.tone}. Style: premium editorial, no watermarks, no visible UI. Context: ${compactSeed}`
+    );
+    setImageUrl(null);
+    setImageError(null);
+  }, [state.data]);
+
+  async function handleGenerateImage() {
+    setImageError(null);
+    setImageUrl(null);
+
+    if (!imagePrompt.trim()) {
+      setImageError("Enter an image prompt first.");
+      return;
+    }
+
+    if (!window.puter?.ai?.txt2img) {
+      setImageError("Image generation is not ready yet. Refresh once and try again.");
+      return;
+    }
+
+    try {
+      setImageLoading(true);
+      const result = await window.puter.ai.txt2img(imagePrompt.trim());
+      const src =
+        result instanceof HTMLImageElement
+          ? result.src
+          : typeof result?.src === "string"
+          ? result.src
+          : null;
+
+      if (!src) {
+        throw new Error("No usable image came back.");
+      }
+
+      setImageUrl(src);
+    } catch (error) {
+      setImageError(error instanceof Error ? error.message : "Image generation failed.");
+    } finally {
+      setImageLoading(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
+      <Script src="https://js.puter.com/v2/" strategy="afterInteractive" />
+
       <Card className="border-0 bg-gradient-to-br from-slate-950 to-slate-800 text-white shadow-soft">
         <CardHeader className="space-y-4">
           <div className="inline-flex w-fit items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-sm text-slate-200">
             <WandSparkles className="h-4 w-4" />
-            New generation
+            Version 2 builder
           </div>
           <div className="space-y-2">
-            <CardTitle className="text-3xl">Create three finished outputs from one source</CardTitle>
+            <CardTitle className="text-3xl text-white">Choose platforms first, then generate</CardTitle>
             <CardDescription className="max-w-3xl text-slate-300">
-              Use Link mode for robust article extraction or Text mode for manual input. Free users
-              get 5 generations per month and Professional tone. Pro unlocks unlimited generations,
-              all tones, and direct export.
+              Link, text, or YouTube in. Multi-platform content out. Plus and Pro also unlock image generation.
             </CardDescription>
           </div>
         </CardHeader>
@@ -105,16 +214,14 @@ export function DashboardGenerator({
           <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div>
               <CardTitle>Plan & usage</CardTitle>
-              <CardDescription>
-                Usage resets every month. Limits are enforced on the server.
-              </CardDescription>
+              <CardDescription>Limits are still enforced on the server.</CardDescription>
             </div>
 
             <div className="rounded-2xl bg-slate-100 px-4 py-3 text-sm text-slate-700">
               {usage.monthlyLimit === null ? (
                 <div className="flex items-center gap-2 font-medium">
                   <Crown className="h-4 w-4" />
-                  Pro plan • Unlimited generations
+                  {currentTier === "plus" ? "Plus" : "Pro"} plan • Unlimited generations
                 </div>
               ) : (
                 <div className="space-y-2">
@@ -140,14 +247,14 @@ export function DashboardGenerator({
                     {usage.remainingThisMonth} generations remaining this month
                   </p>
                   <p className="text-sm text-slate-500">
-                    Upgrade to Pro for unlimited generations, advanced tones, and export buttons.
+                    Upgrade to Plus or Pro to unlock all tones and image generation.
                   </p>
                 </div>
                 <a
                   href={upgradeHref}
                   className="inline-flex h-11 items-center justify-center rounded-xl bg-slate-950 px-4 text-sm font-medium text-white transition hover:bg-slate-800"
                 >
-                  Upgrade to Pro
+                  Upgrade
                 </a>
               </div>
             </div>
@@ -159,8 +266,8 @@ export function DashboardGenerator({
         <CardHeader className="gap-4">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <CardTitle>Source input</CardTitle>
-              <CardDescription>Choose a mode, pick a tone, and submit your source.</CardDescription>
+              <CardTitle>Input mode</CardTitle>
+              <CardDescription>Article, pasted text, or YouTube transcript.</CardDescription>
             </div>
 
             <div className="inline-flex rounded-2xl bg-slate-100 p-1">
@@ -173,7 +280,7 @@ export function DashboardGenerator({
                     : "text-slate-600 hover:text-slate-900"
                 }`}
               >
-                Link mode
+                Link
               </button>
               <button
                 type="button"
@@ -184,78 +291,150 @@ export function DashboardGenerator({
                     : "text-slate-600 hover:text-slate-900"
                 }`}
               >
-                Text mode
+                Text
+              </button>
+              <button
+                type="button"
+                onClick={() => setMode("youtube")}
+                className={`rounded-xl px-4 py-2 text-sm font-medium transition ${
+                  mode === "youtube"
+                    ? "bg-white text-slate-950 shadow-sm"
+                    : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                YouTube
               </button>
             </div>
           </div>
         </CardHeader>
 
         <CardContent className="space-y-6">
-          <div className="space-y-3">
-            <div>
-              <h3 className="text-sm font-medium text-slate-900">Tone selection</h3>
-              <p className="text-sm text-slate-500">
-                Different tones change the final voice and structure of the outputs.
-              </p>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              {toneOptions.map(([toneKey, meta]) => {
-                const locked = currentTier === "free" && meta.proOnly;
-                const active = tone === toneKey;
-
-                return (
-                  <button
-                    key={toneKey}
-                    type="button"
-                    disabled={locked}
-                    onClick={() => setTone(toneKey)}
-                    className={`rounded-2xl border p-4 text-left transition ${
-                      active
-                        ? "border-slate-950 bg-slate-950 text-white"
-                        : locked
-                        ? "cursor-not-allowed border-slate-200 bg-slate-50 text-slate-400"
-                        : "border-slate-200 bg-white text-slate-900 hover:border-slate-300 hover:bg-slate-50"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="font-medium">{meta.label}</span>
-                      {locked ? (
-                        <Lock className="h-4 w-4" />
-                      ) : active ? (
-                        <CheckCircle2 className="h-4 w-4" />
-                      ) : null}
-                    </div>
-                    <p
-                      className={`mt-2 text-sm leading-6 ${
-                        active ? "text-slate-200" : locked ? "text-slate-400" : "text-slate-500"
-                      }`}
-                    >
-                      {meta.description}
-                    </p>
-                    {locked ? (
-                      <div className="mt-3 inline-flex rounded-full border border-amber-200 bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700">
-                        Pro only
-                      </div>
-                    ) : null}
-                  </button>
-                );
-              })}
-            </div>
-
-            {currentTier === "free" ? (
-              <div className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
-                <span>Free includes Professional tone only.</span>
-                <a href={upgradeHref} className="font-medium text-slate-950 underline underline-offset-4">
-                  Upgrade to unlock Casual, Viral, and Authority
-                </a>
-              </div>
-            ) : null}
-          </div>
-
-          <form action={formAction} className="space-y-5">
+          <form action={formAction} className="space-y-6">
             <input type="hidden" name="mode" value={mode} />
             <input type="hidden" name="tone" value={tone} />
+            <input type="hidden" name="lengthPreset" value={lengthPreset} />
+
+            <div className="space-y-3">
+              <div>
+                <h3 className="text-sm font-medium text-slate-900">Select platforms</h3>
+                <p className="text-sm text-slate-500">
+                  Generate only the outputs you actually want.
+                </p>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                {platformOptions.map(([platformKey, meta]) => {
+                  const checked = selectedPlatforms.includes(platformKey);
+                  const Icon = platformIcons[platformKey];
+
+                  return (
+                    <label
+                      key={platformKey}
+                      className={`flex cursor-pointer items-start gap-3 rounded-2xl border p-4 transition ${
+                        checked
+                          ? "border-slate-900 bg-slate-900 text-white"
+                          : "border-slate-200 bg-white text-slate-900 hover:border-slate-300 hover:bg-slate-50"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        name="platforms"
+                        value={platformKey}
+                        checked={checked}
+                        onChange={() => togglePlatform(platformKey)}
+                        className="mt-1"
+                      />
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2 font-medium">
+                          <Icon className="h-4 w-4" />
+                          {meta.label}
+                        </div>
+                        <p className={`text-sm ${checked ? "text-slate-200" : "text-slate-500"}`}>
+                          {meta.description}
+                        </p>
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <h3 className="text-sm font-medium text-slate-900">Tone</h3>
+                <p className="text-sm text-slate-500">
+                  Free stays on Professional. Paid plans unlock the rest.
+                </p>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                {toneOptions.map(([toneKey, meta]) => {
+                  const locked = currentTier === "free" && meta.proOnly;
+                  const active = tone === toneKey;
+
+                  return (
+                    <button
+                      key={toneKey}
+                      type="button"
+                      disabled={locked}
+                      onClick={() => setTone(toneKey)}
+                      className={`rounded-2xl border p-4 text-left transition ${
+                        active
+                          ? "border-slate-950 bg-slate-950 text-white"
+                          : locked
+                          ? "cursor-not-allowed border-slate-200 bg-slate-50 text-slate-400"
+                          : "border-slate-200 bg-white text-slate-900 hover:border-slate-300 hover:bg-slate-50"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="font-medium">{meta.label}</span>
+                        {locked ? (
+                          <Lock className="h-4 w-4" />
+                        ) : active ? (
+                          <CheckCircle2 className="h-4 w-4" />
+                        ) : null}
+                      </div>
+                      <p className={`mt-2 text-sm ${active ? "text-slate-200" : locked ? "text-slate-400" : "text-slate-500"}`}>
+                        {meta.description}
+                      </p>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <h3 className="text-sm font-medium text-slate-900">Length</h3>
+                <p className="text-sm text-slate-500">
+                  Control how compact or expanded the output should feel.
+                </p>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-3">
+                {lengthOptions.map(([presetKey, meta]) => {
+                  const active = lengthPreset === presetKey;
+
+                  return (
+                    <button
+                      key={presetKey}
+                      type="button"
+                      onClick={() => setLengthPreset(presetKey)}
+                      className={`rounded-2xl border p-4 text-left transition ${
+                        active
+                          ? "border-slate-950 bg-slate-950 text-white"
+                          : "border-slate-200 bg-white text-slate-900 hover:border-slate-300 hover:bg-slate-50"
+                      }`}
+                    >
+                      <div className="font-medium">{meta.label}</div>
+                      <p className={`mt-2 text-sm ${active ? "text-slate-200" : "text-slate-500"}`}>
+                        {meta.description}
+                      </p>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
 
             {mode === "link" ? (
               <div className="space-y-2">
@@ -272,8 +451,28 @@ export function DashboardGenerator({
                   disabled={pending}
                   required={mode === "link"}
                 />
+              </div>
+            ) : mode === "youtube" ? (
+              <div className="space-y-2">
+                <label htmlFor="youtube-url" className="text-sm font-medium text-slate-700">
+                  YouTube URL
+                </label>
+                <div className="relative">
+                  <PlaySquare className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <Input
+                    id="youtube-url"
+                    name="youtubeUrl"
+                    type="url"
+                    placeholder="https://www.youtube.com/watch?v=..."
+                    value={youtubeUrl}
+                    onChange={(event) => setYoutubeUrl(event.target.value)}
+                    disabled={pending}
+                    required={mode === "youtube"}
+                    className="pl-9"
+                  />
+                </div>
                 <p className="text-sm text-slate-500">
-                  The app fetches the page, extracts readable content, and sends only clean text to the model.
+                  The app fetches the transcript first, then generates platform-specific content from it.
                 </p>
               </div>
             ) : (
@@ -296,9 +495,6 @@ export function DashboardGenerator({
                   required={mode === "text"}
                   rows={14}
                 />
-                <p className="text-sm text-slate-500">
-                  Server validation rejects overly short or overly long input.
-                </p>
               </div>
             )}
 
@@ -308,32 +504,21 @@ export function DashboardGenerator({
               </div>
             ) : null}
 
-            <div className="flex flex-wrap items-center gap-3">
-              <Button type="submit" size="lg" disabled={pending || atLimit}>
-                {pending ? (
-                  <>
-                    <LoaderCircle className="h-4 w-4 animate-spin" />
-                    Generating...
-                  </>
-                ) : atLimit ? (
-                  "Monthly limit reached"
-                ) : (
-                  <>
-                    <WandSparkles className="h-4 w-4" />
-                    Generate content
-                  </>
-                )}
-              </Button>
-
-              {atLimit ? (
-                <a
-                  href={upgradeHref}
-                  className="inline-flex h-12 items-center justify-center rounded-xl border border-slate-200 px-4 text-sm font-medium text-slate-900 transition hover:bg-slate-50"
-                >
-                  Upgrade to Pro
-                </a>
-              ) : null}
-            </div>
+            <Button type="submit" size="lg" disabled={pending || atLimit}>
+              {pending ? (
+                <>
+                  <LoaderCircle className="h-4 w-4 animate-spin" />
+                  Generating...
+                </>
+              ) : atLimit ? (
+                "Monthly limit reached"
+              ) : (
+                <>
+                  <WandSparkles className="h-4 w-4" />
+                  Generate selected platforms
+                </>
+              )}
+            </Button>
           </form>
         </CardContent>
       </Card>
@@ -342,7 +527,7 @@ export function DashboardGenerator({
         <Card className="border-0 bg-white shadow-soft">
           <CardContent className="flex items-center gap-3 py-8 text-slate-700">
             <LoaderCircle className="h-5 w-5 animate-spin" />
-            Processing the source, applying tone rules, and creating three structured outputs...
+            Building your selected platform outputs...
           </CardContent>
         </Card>
       ) : null}
@@ -351,10 +536,9 @@ export function DashboardGenerator({
         <div className="space-y-6">
           <Card className="border-0 bg-white shadow-soft">
             <CardHeader className="gap-3">
-              <CardTitle className="text-xl">Latest result</CardTitle>
+              <CardTitle>Latest result</CardTitle>
               <CardDescription>
-                {state.data.inputMode === "link" ? "Link mode" : "Text mode"} •{" "}
-                {TONE_META[state.data.tone].label} tone
+                {state.data.inputMode} • {TONE_META[state.data.tone].label} • {LENGTH_META[state.data.lengthPreset].label}
               </CardDescription>
               <div className="text-sm font-medium text-slate-900">{state.data.sourceTitle}</div>
               {state.data.sourceUrl ? (
@@ -370,97 +554,116 @@ export function DashboardGenerator({
             </CardHeader>
           </Card>
 
-          <Card className="border-0 bg-white shadow-soft">
-            <CardHeader className="flex flex-row items-start justify-between gap-4">
-              <div className="space-y-1">
-                <CardTitle className="flex items-center gap-2">
-                  <Megaphone className="h-5 w-5" />
-                  LinkedIn post
-                </CardTitle>
-                <CardDescription>Hook-led, polished, and LinkedIn-native.</CardDescription>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <CopyButton text={state.data.linkedinPost} label="Copy" />
-                <ExportButton
-                  text={state.data.linkedinPost}
-                  filename="linkedin-post.txt"
-                  disabled={!currentTier || currentTier === "free"}
-                />
-                {currentTier === "free" ? (
-                  <a href={upgradeHref} className="text-xs font-medium text-slate-900 underline underline-offset-4">
-                    Unlock export
-                  </a>
-                ) : null}
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="whitespace-pre-wrap text-sm leading-7 text-slate-700">
-                {state.data.linkedinPost}
-              </div>
-            </CardContent>
-          </Card>
+          {state.data.selectedPlatforms.map((platform) => {
+            const textValue = state.data?.outputs[platform];
+            if (!textValue) return null;
+
+            const Icon = platformIcons[platform];
+
+            return (
+              <Card key={platform} className="border-0 bg-white shadow-soft">
+                <CardHeader className="flex flex-row items-start justify-between gap-4">
+                  <div className="space-y-1">
+                    <CardTitle className="flex items-center gap-2">
+                      <Icon className="h-5 w-5" />
+                      {PLATFORM_META[platform].label}
+                    </CardTitle>
+                    <CardDescription>{PLATFORM_META[platform].description}</CardDescription>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <CopyButton text={textValue} label="Copy" />
+                    <ExportButton
+                      text={textValue}
+                      filename={`${platform}.txt`}
+                      disabled={!imageUnlocked}
+                    />
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="whitespace-pre-wrap text-sm leading-7 text-slate-700">
+                    {textValue}
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
 
           <Card className="border-0 bg-white shadow-soft">
             <CardHeader className="flex flex-row items-start justify-between gap-4">
               <div className="space-y-1">
                 <CardTitle className="flex items-center gap-2">
-                  <Link2 className="h-5 w-5" />
-                  Twitter/X thread
+                  <FileImage className="h-5 w-5" />
+                  Image generation
                 </CardTitle>
-                <CardDescription>Numbered, punchy, and easy to post thread-by-thread.</CardDescription>
+                <CardDescription>
+                  Generate a matching visual with Puter.js.
+                </CardDescription>
               </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <CopyButton text={state.data.twitterThread} label="Copy" />
-                <ExportButton
-                  text={state.data.twitterThread}
-                  filename="twitter-thread.txt"
-                  disabled={currentTier === "free"}
-                />
-                {currentTier === "free" ? (
-                  <a href={upgradeHref} className="text-xs font-medium text-slate-900 underline underline-offset-4">
-                    Unlock export
-                  </a>
-                ) : null}
-              </div>
+              {!imageUnlocked ? (
+                <a
+                  href={upgradeHref}
+                  className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 px-4 text-sm font-medium text-slate-900 transition hover:bg-slate-50"
+                >
+                  Unlock on Plus
+                </a>
+              ) : null}
             </CardHeader>
-            <CardContent>
-              <div className="whitespace-pre-wrap text-sm leading-7 text-slate-700">
-                {state.data.twitterThread}
-              </div>
-            </CardContent>
-          </Card>
 
-          <Card className="border-0 bg-white shadow-soft">
-            <CardHeader className="flex flex-row items-start justify-between gap-4">
-              <div className="space-y-1">
-                <CardTitle className="flex items-center gap-2">
-                  <FileText className="h-5 w-5" />
-                  Newsletter version
-                </CardTitle>
-                <CardDescription>Headline, summary, and readable long-form flow.</CardDescription>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <CopyButton text={state.data.newsletter} label="Copy" />
-                <ExportButton
-                  text={state.data.newsletter}
-                  filename="newsletter.txt"
-                  disabled={currentTier === "free"}
-                />
-                {currentTier === "free" ? (
-                  <a href={upgradeHref} className="text-xs font-medium text-slate-900 underline underline-offset-4">
-                    Unlock export
-                  </a>
-                ) : null}
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="whitespace-pre-wrap text-sm leading-7 text-slate-700">
-                {state.data.newsletter}
-              </div>
+            <CardContent className="space-y-4">
+              {!imageUnlocked ? (
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-600">
+                  Image generation is locked on Free. Upgrade to Plus or Pro to enable it.
+                </div>
+              ) : (
+                <>
+                  <div className="space-y-2">
+                    <label htmlFor="image-prompt" className="text-sm font-medium text-slate-700">
+                      Image prompt
+                    </label>
+                    <Textarea
+                      id="image-prompt"
+                      value={imagePrompt}
+                      onChange={(event) => setImagePrompt(event.target.value)}
+                      rows={5}
+                      placeholder="Describe the image you want..."
+                    />
+                  </div>
+
+                  {imageError ? (
+                    <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                      {imageError}
+                    </div>
+                  ) : null}
+
+                  <Button type="button" onClick={handleGenerateImage} disabled={imageLoading}>
+                    {imageLoading ? (
+                      <>
+                        <LoaderCircle className="h-4 w-4 animate-spin" />
+                        Generating image...
+                      </>
+                    ) : (
+                      <>
+                        <FileImage className="h-4 w-4" />
+                        Generate image
+                      </>
+                    )}
+                  </Button>
+
+                  {imageUrl ? (
+                    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                      <img
+                        src={imageUrl}
+                        alt="Generated visual"
+                        className="h-auto w-full rounded-xl"
+                      />
+                    </div>
+                  ) : null}
+                </>
+              )}
             </CardContent>
           </Card>
         </div>
       ) : null}
     </div>
   );
-          }
+} 

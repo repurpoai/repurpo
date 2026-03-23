@@ -1,35 +1,32 @@
 import { GoogleGenAI } from "@google/genai";
 import { z } from "zod";
+import {
+  type ContentPlatform,
+  type ContentTone,
+  type LengthPreset
+} from "@/lib/plans";
 import { limitCharacters } from "@/lib/utils";
-import { type ContentTone } from "@/lib/plans";
 
-const repurposedContentSchema = z.object({
-  linkedin_post: z.string().min(1),
-  twitter_thread: z.string().min(1),
-  newsletter: z.string().min(1)
+const platformOutputSchema = z.object({
+  linkedin: z.string().min(1).optional(),
+  x: z.string().min(1).optional(),
+  instagram: z.string().min(1).optional(),
+  reddit: z.string().min(1).optional(),
+  newsletter: z.string().min(1).optional()
 });
 
-const repurposedContentJsonSchema = {
+export type PlatformOutputs = Partial<Record<ContentPlatform, string>>;
+
+const responseJsonSchema = {
   type: "object",
   additionalProperties: false,
   properties: {
-    linkedin_post: {
-      type: "string",
-      description:
-        "A polished LinkedIn post in plain text with distinct structure, natural spacing, and a strong opening."
-    },
-    twitter_thread: {
-      type: "string",
-      description:
-        "A numbered Twitter/X thread in plain text with 6 to 8 short posts separated by blank lines."
-    },
-    newsletter: {
-      type: "string",
-      description:
-        "A newsletter-ready piece in plain text with a headline, a short summary section, and a readable body."
-    }
-  },
-  required: ["linkedin_post", "twitter_thread", "newsletter"]
+    linkedin: { type: "string" },
+    x: { type: "string" },
+    instagram: { type: "string" },
+    reddit: { type: "string" },
+    newsletter: { type: "string" }
+  }
 };
 
 const toneInstructions: Record<ContentTone, string> = {
@@ -38,12 +35,29 @@ const toneInstructions: Record<ContentTone, string> = {
   casual:
     "Use a warm, conversational voice. Make it feel natural and easy to read without becoming sloppy.",
   viral:
-    "Use a hook-first, high-energy style that is built for attention and shareability, but stay factual and grounded in the source.",
+    "Use a hook-first, high-energy style built for attention and shareability, but stay factual and grounded in the source.",
   authority:
-    "Use an expert, confident, insight-led voice. Make it feel like a strong point of view from someone who deeply understands the topic."
+    "Use an expert, confident, insight-led voice. Make it feel like strong thinking from someone who deeply understands the topic."
 };
 
-export type RepurposedContent = z.infer<typeof repurposedContentSchema>;
+const lengthInstructions: Record<LengthPreset, string> = {
+  short: "Keep each output compact and fast to skim.",
+  medium: "Use a balanced amount of detail and breathing room.",
+  long: "Allow more depth, nuance, transitions, and detail."
+};
+
+const platformInstructions: Record<ContentPlatform, string> = {
+  linkedin:
+    "LinkedIn: strong opening line, 3 to 5 short paragraphs, one compact bullet-style section if useful, and a thoughtful closing line or question.",
+  x:
+    "X: create a numbered thread with 6 to 8 short posts separated by blank lines. Start with a strong opener and end with a concise takeaway.",
+  instagram:
+    "Instagram: create a caption with a strong hook, short visual-friendly lines, natural paragraph breaks, and a light hashtag section only if it genuinely fits the source.",
+  reddit:
+    "Reddit: write in a human, grounded, non-corporate way. Prioritize clarity, usefulness, and natural flow over hype.",
+  newsletter:
+    "Newsletter: start with a headline, add a short summary line, then write a concise, readable editorial-style body."
+};
 
 function getModelName() {
   return process.env.GEMINI_MODEL?.trim() || "gemini-2.5-flash";
@@ -121,29 +135,47 @@ function parseStructuredJson(raw: string) {
   for (const attempt of attempts) {
     try {
       const parsed = JSON.parse(attempt);
-      return repurposedContentSchema.parse(parsed);
+      return platformOutputSchema.parse(parsed);
     } catch {}
   }
 
   throw new Error("The model returned malformed JSON.");
 }
 
+function validateRequestedPlatforms(outputs: PlatformOutputs, platforms: ContentPlatform[]) {
+  for (const platform of platforms) {
+    const value = outputs[platform];
+    if (!value || !value.trim()) {
+      throw new Error(`The model did not return a usable ${platform} output.`);
+    }
+  }
+}
+
 function buildPrompt(input: {
   sourceTitle: string;
   sourceText: string;
   tone: ContentTone;
+  lengthPreset: LengthPreset;
+  platforms: ContentPlatform[];
   retryMode?: boolean;
 }) {
+  const requestedPlatformRules = input.platforms
+    .map((platform) => `- ${platformInstructions[platform]}`)
+    .join("\n");
+
   return `
-You are a content repurposing editor.
+You are a platform-specific content repurposing editor.
 
-Your job is to transform one source into three distinct outputs:
-1. LinkedIn post
-2. Twitter/X thread
-3. Newsletter version
+Your job is to transform one source into outputs for the requested platforms only.
 
-Tone to use:
+Requested platforms:
+${input.platforms.map((platform) => `- ${platform}`).join("\n")}
+
+Tone:
 ${input.tone.toUpperCase()} — ${toneInstructions[input.tone]}
+
+Length:
+${input.lengthPreset.toUpperCase()} — ${lengthInstructions[input.lengthPreset]}
 
 Non-negotiable source fidelity rules:
 - Use only facts, claims, names, dates, examples, numbers, and ideas explicitly present in the source.
@@ -156,41 +188,17 @@ Formatting rules:
 - Return exactly one valid JSON object.
 - No markdown code fences.
 - No explanation before or after JSON.
-- No extra keys.
-- Each field must be plain text.
+- Include only the requested platform keys.
+- Each value must be plain text.
 
-Output requirements:
-
-linkedin_post:
-- Strong first-line hook
-- 3 to 5 short paragraphs
-- Include one compact bullet-style section if it improves clarity
-- End with a thoughtful closing line or question
-- Roughly 120 to 220 words
-- Must feel native to LinkedIn
-
-twitter_thread:
-- 6 to 8 posts
-- Number each post like 1/6, 2/6, etc.
-- Separate each post with a blank line
-- Keep each post punchy and scannable
-- Start with a strong opener
-- End with a concise final takeaway
-- Must feel native to X/Twitter
-
-newsletter:
-- Start with a headline
-- Add a short summary line under it
-- Then write a concise, readable newsletter body
-- Use short paragraphs and strong transitions
-- Include a "Why it matters" style angle if supported by the source
-- Must feel native to newsletters
+Platform requirements:
+${requestedPlatformRules}
 
 ${
   input.retryMode
     ? `Important retry instruction:
-Your previous answer was not valid JSON.
-Return only a single valid JSON object now.`
+Your previous answer was not valid enough for the schema.
+Return only one valid JSON object now.`
     : ""
 }
 
@@ -206,6 +214,8 @@ async function requestGeneration(input: {
   sourceTitle: string;
   sourceText: string;
   tone: ContentTone;
+  lengthPreset: LengthPreset;
+  platforms: ContentPlatform[];
   retryMode?: boolean;
 }) {
   const client = getClient();
@@ -216,9 +226,9 @@ async function requestGeneration(input: {
     contents: buildPrompt(input),
     config: {
       responseMimeType: "application/json",
-      responseJsonSchema: repurposedContentJsonSchema,
+      responseJsonSchema,
       temperature: input.retryMode ? 0.2 : 0.5,
-      maxOutputTokens: 3600
+      maxOutputTokens: 3200
     }
   });
 
@@ -229,9 +239,14 @@ async function requestGeneration(input: {
   }
 
   const parsed = parseStructuredJson(rawText);
+  validateRequestedPlatforms(parsed, input.platforms);
+
+  const outputs = Object.fromEntries(
+    input.platforms.map((platform) => [platform, parsed[platform]?.trim() ?? ""])
+  ) as PlatformOutputs;
 
   return {
-    ...parsed,
+    outputs,
     modelName: model
   };
 }
@@ -240,11 +255,17 @@ export async function generateRepurposedContent(input: {
   sourceTitle: string;
   sourceText: string;
   tone: ContentTone;
+  lengthPreset: LengthPreset;
+  platforms: ContentPlatform[];
 }) {
   try {
     return await requestGeneration(input);
   } catch (error) {
-    if (error instanceof Error && error.message === "The model returned malformed JSON.") {
+    if (
+      error instanceof Error &&
+      (error.message === "The model returned malformed JSON." ||
+        error.message.startsWith("The model did not return a usable"))
+    ) {
       return await requestGeneration({
         ...input,
         retryMode: true

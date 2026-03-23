@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Crown, History, Home, LogOut, Wallet } from "lucide-react";
+import { History, Home, LogOut, User, Wallet } from "lucide-react";
 import { logoutAction } from "@/app/auth/actions";
 import { PlanBadge } from "@/components/plan-badge";
 import { Button } from "@/components/ui/button";
@@ -30,6 +30,11 @@ const navItems = [
     href: "/history",
     label: "My History",
     icon: History
+  },
+  {
+    href: "/profile",
+    label: "Profile",
+    icon: User
   },
   {
     href: "/pricing",
@@ -65,15 +70,12 @@ export function Sidebar({
         </div>
 
         <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-          <div className="mb-2 flex items-center gap-2 text-sm font-medium text-white">
-            <Crown className="h-4 w-4" />
-            Usage
-          </div>
-
           {monthlyLimit === null ? (
             <div className="space-y-1">
               <div className="text-sm font-medium text-white">Unlimited generations</div>
-              <p className="text-xs text-slate-400">All tones and export buttons unlocked.</p>
+              <p className="text-xs text-slate-400">
+                Your current plan has no monthly text generation cap.
+              </p>
             </div>
           ) : (
             <div className="space-y-3">

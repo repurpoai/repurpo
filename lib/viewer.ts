@@ -10,6 +10,7 @@ export type ViewerContext = {
   usedThisMonth: number;
   remainingThisMonth: number | null;
   usageWindowLabel: string;
+  isPaid: boolean;
   isPro: boolean;
 };
 
@@ -59,6 +60,7 @@ export async function getViewerContext(): Promise<ViewerContext | null> {
     usedThisMonth,
     remainingThisMonth,
     usageWindowLabel: label,
+    isPaid: tier !== "free",
     isPro: tier === "pro"
   };
 }
