@@ -11,7 +11,7 @@ import {
   Megaphone,
   WandSparkles
 } from "lucide-react";
-import { generateContentAction, initialGenerationFormState } from "@/app/dashboard/actions";
+import { generateContentAction, type GenerationFormState } from "@/app/dashboard/actions";
 import { CopyButton } from "@/components/copy-button";
 import { ExportButton } from "@/components/export-button";
 import { Button } from "@/components/ui/button";
@@ -32,6 +32,13 @@ type DashboardGeneratorProps = {
   remainingThisMonth: number | null;
   usageWindowLabel: string;
   upgradeHref: string;
+};
+
+const initialGenerationFormState: GenerationFormState = {
+  success: false,
+  error: null,
+  data: null,
+  usage: null
 };
 
 export function DashboardGenerator({
@@ -456,4 +463,4 @@ export function DashboardGenerator({
       ) : null}
     </div>
   );
-}
+          }
