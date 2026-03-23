@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { CopyButton } from "@/components/copy-button";
 import { ExportButton } from "@/components/export-button";
+import { OpenInAppButton } from "@/components/open-in-app-button";
 import { Sidebar } from "@/components/sidebar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { PLATFORM_META, TONE_META, type ContentPlatform, type ContentTone, type LengthPreset } from "@/lib/plans";
@@ -191,13 +192,20 @@ export default async function HistoryPage() {
                                 {PLATFORM_META[platform].label}
                               </h3>
                               <div className="flex flex-wrap items-center gap-2">
-                                <CopyButton text={text} label="Copy" />
-                                <ExportButton
-                                  text={text}
-                                  filename={`${fileBase}-${platform}.txt`}
-                                  disabled={!viewer.isPaid}
-                                />
-                              </div>
+  <CopyButton text={text} label="Copy" />
+  <ExportButton
+    text={text}
+    filename={`${fileBase}-${platform}.txt`}
+    disabled={!viewer.isPaid}
+  />
+  {platform !== "newsletter" ? (
+    <OpenInAppButton
+      platform={platform}
+      text={text}
+      sourceTitle={sourceLabel}
+    />
+  ) : null}
+</div>
                             </div>
                             <div className="whitespace-pre-wrap rounded-2xl bg-slate-50 p-4 text-sm leading-7 text-slate-700">
                               {text}
