@@ -18,7 +18,7 @@ export default async function HomePage() {
         <header className="flex items-center justify-between">
           <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-slate-200">
             <Sparkles className="h-4 w-4" />
-            User-First AI Content Repurposer
+            Repurpo
           </div>
 
           <div className="flex items-center gap-3">
