@@ -218,7 +218,7 @@ async function requestGeneration(input: {
       responseMimeType: "application/json",
       responseJsonSchema: repurposedContentJsonSchema,
       temperature: input.retryMode ? 0.2 : 0.5,
-      maxOutputTokens: 2800
+      maxOutputTokens: 3600
     }
   });
 
