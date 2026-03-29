@@ -5,6 +5,7 @@ import { useActionState, useEffect, useMemo, useState, type ComponentType } from
 import {
   CheckCircle2,
   Crown,
+  Download,
   FileImage,
   FileText,
   Link2,
@@ -76,52 +77,6 @@ const platformIcons: Record<ContentPlatform, ComponentType<{ className?: string 
   newsletter: Newspaper
 };
 
-
-function trimToSentence(value: string, maxCharacters: number) {
-  const normalized = value.replace(/\s+/g, " ").trim();
-  if (!normalized) return "";
-  if (normalized.length <= maxCharacters) return normalized;
-
-  const sliced = normalized.slice(0, maxCharacters).trim();
-  const boundary = sliced.search(/[.!?](?!.*[.!?])/);
-
-  if (boundary !== -1 && boundary >= Math.floor(maxCharacters * 0.45)) {
-    return sliced.slice(0, boundary + 1).trim();
-  }
-
-  const lastSeparator = Math.max(sliced.lastIndexOf(". "), sliced.lastIndexOf("! "), sliced.lastIndexOf("? "), sliced.lastIndexOf(", "), sliced.lastIndexOf("; "), sliced.lastIndexOf(": "));
-
-  if (lastSeparator !== -1 && lastSeparator >= Math.floor(maxCharacters * 0.45)) {
-    return sliced.slice(0, lastSeparator + 1).trim();
-  }
-
-  const lastSpace = sliced.lastIndexOf(" ");
-  return (lastSpace === -1 ? sliced : sliced.slice(0, lastSpace)).trim();
-}
-
-function buildImagePrompt(input: {
-  sourceTitle: string;
-  tone: ContentTone;
-  selectedPlatforms: ContentPlatform[];
-  outputs: Partial<Record<ContentPlatform, string>>;
-}) {
-  const orderedSeedPlatforms: ContentPlatform[] = ["instagram", "linkedin", "x", "newsletter", "reddit"];
-  const seed = orderedSeedPlatforms
-    .map((platform) => input.outputs[platform] ?? "")
-    .find((value) => value.trim()) ?? "";
-
-  const visualContext = trimToSentence(seed, 420);
-  const platformLabels = input.selectedPlatforms.map((platform) => PLATFORM_META[platform].label).join(", ");
-  const toneLabel = TONE_META[input.tone].label.toLowerCase();
-
-  return [
-    `Create a premium editorial social media visual inspired by "${input.sourceTitle}".`,
-    `Match a ${toneLabel} tone for ${platformLabels}.`,
-    "Use one clear focal subject, strong composition, layered depth, and a polished modern look.",
-    "No text overlay, no logos, no watermarks, no UI elements, no screenshots.",
-    visualContext ? `Visual direction: ${visualContext}` : "Visual direction: make the concept feel specific, polished, and story-led."
-  ].join(" ");
-}
 
 export function DashboardGenerator({
   tier,
@@ -204,14 +159,7 @@ export function DashboardGenerator({
   useEffect(() => {
     if (!state.data) return;
 
-    setImagePrompt(
-      buildImagePrompt({
-        sourceTitle: state.data.sourceTitle,
-        tone: state.data.tone,
-        selectedPlatforms: state.data.selectedPlatforms,
-        outputs: state.data.outputs
-      })
-    );
+    setImagePrompt(state.data.imagePrompt);
     setImageUsage({
       imageUsedThisMonth: usage.imageUsedThisMonth,
       imageMonthlyLimit: usage.imageMonthlyLimit,
@@ -221,6 +169,19 @@ export function DashboardGenerator({
     setImageUrl(null);
     setImageError(null);
   }, [state.data, usage.imageMonthlyLimit, usage.imageRemainingThisMonth, usage.imageUsedThisMonth, usage.usageWindowLabel]);
+
+
+
+  function handleDownloadImage() {
+    if (!imageUrl) return;
+
+    const link = document.createElement("a");
+    link.href = imageUrl;
+    link.download = `repurpo-image-${Date.now()}.png`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
 
   async function handleGenerateImage() {
     if (!imageUnlocked) {
@@ -725,8 +686,13 @@ export function DashboardGenerator({
                 </CardHeader>
 
                 <CardContent className="space-y-4">
-                    <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-600">
-                      Free gets 1 image per month, Plus gets 5 per month, and Pro gets unlimited images.
+                    <div className="space-y-3">
+                      <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-600">
+                        Free gets 1 image per month, Plus gets 5 per month, and Pro gets unlimited images.
+                      </div>
+                      <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-800">
+                        Generated images are temporary and do not appear in history yet. Download them before leaving this page.
+                      </div>
                     </div>
 
                     <div className="space-y-2">
@@ -791,15 +757,23 @@ export function DashboardGenerator({
                       </Button>
 
                     {imageUrl ? (
-                      <div className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50 p-3">
-                        <Image
-                          src={imageUrl}
-                          alt="Generated visual"
-                          width={1400}
-                          height={1400}
-                          unoptimized
-                          className="h-auto w-full rounded-lg"
-                        />
+                      <div className="space-y-3">
+                        <div className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50 p-3">
+                          <Image
+                            src={imageUrl}
+                            alt="Generated visual"
+                            width={1400}
+                            height={1400}
+                            unoptimized
+                            className="h-auto w-full rounded-lg"
+                          />
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Button type="button" variant="outline" onClick={handleDownloadImage}>
+                            <Download className="h-4 w-4" />
+                            Download image
+                          </Button>
+                        </div>
                       </div>
                     ) : null}
                 </CardContent>

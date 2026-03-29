@@ -61,6 +61,7 @@ export type GenerationFormState = {
     sourceTitle: string;
     sourceUrl: string | null;
     outputs: PlatformOutputs;
+    imagePrompt: string;
     selectedPlatforms: ContentPlatform[];
   } | null;
   usage: UsageState | null;
@@ -276,6 +277,7 @@ export async function generateContentAction(
         sourceTitle,
         sourceUrl,
         outputs: generated.outputs,
+        imagePrompt: generated.imagePrompt,
         selectedPlatforms
       },
       usage: buildUsageState(viewer, { usedThisMonth, remainingThisMonth })

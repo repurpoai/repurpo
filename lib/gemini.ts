@@ -7,12 +7,15 @@ import {
 } from "@/lib/plans";
 import { limitCharacters } from "@/lib/utils";
 
-const platformOutputSchema = z.object({
-  linkedin: z.string().min(1).optional(),
-  x: z.string().min(1).optional(),
-  instagram: z.string().min(1).optional(),
-  reddit: z.string().min(1).optional(),
-  newsletter: z.string().min(1).optional()
+const generationResponseSchema = z.object({
+  outputs: z.object({
+    linkedin: z.string().min(1).optional(),
+    x: z.string().min(1).optional(),
+    instagram: z.string().min(1).optional(),
+    reddit: z.string().min(1).optional(),
+    newsletter: z.string().min(1).optional()
+  }),
+  imagePrompt: z.string().min(1)
 });
 
 export type PlatformOutputs = Partial<Record<ContentPlatform, string>>;
@@ -21,8 +24,18 @@ function buildResponseJsonSchema(platforms: ContentPlatform[]) {
   return {
     type: "object",
     additionalProperties: false,
-    required: platforms,
-    properties: Object.fromEntries(platforms.map((platform) => [platform, { type: "string" }]))
+    required: ["outputs", "imagePrompt"],
+    properties: {
+      outputs: {
+        type: "object",
+        additionalProperties: false,
+        required: platforms,
+        properties: Object.fromEntries(platforms.map((platform) => [platform, { type: "string" }]))
+      },
+      imagePrompt: {
+        type: "string"
+      }
+    }
   };
 }
 
@@ -71,7 +84,7 @@ const platformInstructions: Record<ContentPlatform, string> = {
   linkedin:
     "LinkedIn: strong opening line, 3 to 5 short paragraphs, one compact bullet-style section if useful, and a thoughtful closing line or question.",
   x:
-    "X: create a numbered thread with 6 to 8 short posts separated by blank lines. Start with a strong opener and end with a concise takeaway.",
+    "X: create a numbered thread with short posts separated by blank lines. Start with a strong opener and end with a concise takeaway.",
   instagram:
     "Instagram: create a caption with a strong hook, short visual-friendly lines, natural paragraph breaks, and a light hashtag section only if it genuinely fits the source.",
   reddit:
@@ -156,7 +169,7 @@ function parseStructuredJson(raw: string) {
   for (const attempt of attempts) {
     try {
       const parsed = JSON.parse(attempt);
-      return platformOutputSchema.parse(parsed);
+      return generationResponseSchema.parse(parsed);
     } catch {}
   }
 
@@ -188,9 +201,9 @@ function buildPrompt(input: {
     .join("\n");
 
   return `
-You are a platform-specific content repurposing editor.
+You are a platform-specific content repurposing editor and visual concept assistant.
 
-Your job is to transform one source into outputs for the requested platforms only.
+Your job is to transform one source into outputs for the requested platforms only, and also create one hidden image prompt for a matching visual.
 
 Requested platforms:
 ${input.platforms.map((platform) => `- ${platform}`).join("\n")}
@@ -212,15 +225,23 @@ Formatting rules:
 - Return exactly one valid JSON object.
 - No markdown code fences.
 - No explanation before or after JSON.
-- Include only the requested platform keys.
-- Every requested key must be present exactly once.
-- Each value must be plain text.
+- Include only the requested platform keys inside outputs.
+- Every requested platform key must be present exactly once inside outputs.
+- Each outputs value must be plain text.
+- imagePrompt must be a single string.
 
 Quality rules:
 - Make SHORT, MEDIUM, and LONG feel materially different in depth, pacing, and total output size.
 - Match the target length for each requested platform closely.
 - Avoid filler, repetition, and generic motivational phrasing.
 - Keep hooks, structure, and closing lines specific to each platform.
+
+Image prompt rules:
+- Write imagePrompt as 2 to 3 lines max.
+- Describe a clear visual scene with subject, environment, composition, mood, and lighting.
+- Make it polished, social-media ready, and strongly connected to the source.
+- Do not repeat the post word-for-word.
+- Do not include text overlays, logos, screenshots, UI, or watermarks.
 
 Platform requirements:
 ${requestedPlatformRules}
@@ -229,15 +250,27 @@ ${
   input.retryMode
     ? `Important retry instruction:
 Your previous answer was not valid enough for the schema.
-Return only one valid JSON object now, with every requested key filled.`
+Return only one valid JSON object now, with every requested platform key filled and imagePrompt present.`
     : ""
 }
 
 Source title:
+"""
 ${input.sourceTitle}
+"""
 
 Source text:
+"""
 ${limitCharacters(input.sourceText, 26000)}
+"""
+
+Return strict JSON in this exact shape:
+{
+  "outputs": {
+    "platform_name": "generated text"
+  },
+  "imagePrompt": "2-3 line visual prompt"
+}
   `.trim();
 }
 
@@ -270,14 +303,15 @@ async function requestGeneration(input: {
   }
 
   const parsed = parseStructuredJson(rawText);
-  validateRequestedPlatforms(parsed, input.platforms);
+  validateRequestedPlatforms(parsed.outputs, input.platforms);
 
   const outputs = Object.fromEntries(
-    input.platforms.map((platform) => [platform, parsed[platform]?.trim() ?? ""])
+    input.platforms.map((platform) => [platform, parsed.outputs[platform]?.trim() ?? ""])
   ) as PlatformOutputs;
 
   return {
     outputs,
+    imagePrompt: parsed.imagePrompt.trim(),
     modelName: model
   };
 }
