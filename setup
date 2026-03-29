@@ -5,6 +5,10 @@ NEXT_PUBLIC_SUPABASE_URL
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
 GEMINI_API_KEY
 GEMINI_MODEL
+SUPADATA_API_KEY
+SUPADATA_BASE_URL
+SERPAPI_API_KEY
+SERPAPI_BASE_URL
 CLOUDFLARE_ACCOUNT_ID
 CLOUDFLARE_API_TOKEN
 CLOUDFLARE_AI_IMAGE_MODEL
@@ -66,6 +70,13 @@ Gemini text setup:
 Create the API key in Google AI Studio and place it in GEMINI_API_KEY.
 Recommended text model default: gemini-2.5-flash
 
+YouTube transcript provider setup:
+Add SUPADATA_API_KEY for the primary transcript provider.
+Optional: set SUPADATA_BASE_URL if you need a custom base URL.
+Add SERPAPI_API_KEY for the fallback transcript provider.
+Optional: set SERPAPI_BASE_URL if you need a custom SerpApi endpoint.
+Transcript order in this build: Supadata -> SerpApi -> youtube-transcript.
+
 Cloudflare image setup:
 In Cloudflare, create an API token for Workers AI and copy your Account ID.
 Recommended image model default: @cf/stabilityai/stable-diffusion-xl-base-1.0
@@ -98,6 +109,6 @@ server-enforced monthly image usage caps
 DB tier tracking
 private history saving
 multi-platform generation
-YouTube transcript mode
+YouTube transcript fallback chain (Supadata -> SerpApi -> youtube-transcript)
 Gemini text generation
 Cloudflare image generation

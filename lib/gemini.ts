@@ -5,7 +5,7 @@ import {
   type ContentTone,
   type LengthPreset
 } from "@/lib/plans";
-import { limitCharacters } from "@/lib/utils";
+import { countWords, limitCharacters, sanitizeSourceText } from "@/lib/utils";
 
 const generationResponseSchema = z.object({
   outputs: z.object({
@@ -18,7 +18,18 @@ const generationResponseSchema = z.object({
   imagePrompt: z.string().min(1)
 });
 
+const summaryResponseSchema = z.object({
+  summary: z.string().min(1)
+});
+
 export type PlatformOutputs = Partial<Record<ContentPlatform, string>>;
+
+const DIRECT_SOURCE_CHARACTER_LIMIT = 18000;
+const DIRECT_SOURCE_WORD_LIMIT = 3200;
+const CHUNK_CHARACTER_TARGET = 7000;
+const CHUNK_CHARACTER_HARD_LIMIT = 8200;
+const CHUNK_SUMMARY_CHARACTER_LIMIT = 2200;
+const MASTER_SUMMARY_CHARACTER_LIMIT = 12000;
 
 function buildResponseJsonSchema(platforms: ContentPlatform[]) {
   return {
@@ -176,6 +187,31 @@ function parseStructuredJson(raw: string) {
   throw new Error("The model returned malformed JSON.");
 }
 
+function parseSummaryJson(raw: string) {
+  const cleaned = cleanJsonCandidate(raw);
+  const attempts: string[] = [cleaned];
+
+  const fencedMatch = cleaned.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fencedMatch?.[1]) {
+    attempts.push(cleanJsonCandidate(fencedMatch[1]));
+  }
+
+  const firstBrace = cleaned.indexOf("{");
+  const lastBrace = cleaned.lastIndexOf("}");
+  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+    attempts.push(cleanJsonCandidate(cleaned.slice(firstBrace, lastBrace + 1)));
+  }
+
+  for (const attempt of attempts) {
+    try {
+      const parsed = JSON.parse(attempt);
+      return summaryResponseSchema.parse(parsed);
+    } catch {}
+  }
+
+  throw new Error("The model returned malformed JSON.");
+}
+
 function validateRequestedPlatforms(outputs: PlatformOutputs, platforms: ContentPlatform[]) {
   for (const platform of platforms) {
     const value = outputs[platform];
@@ -274,6 +310,254 @@ Return strict JSON in this exact shape:
   `.trim();
 }
 
+function needsCompression(sourceText: string) {
+  const normalized = sanitizeSourceText(sourceText);
+  return (
+    normalized.length > DIRECT_SOURCE_CHARACTER_LIMIT ||
+    countWords(normalized) > DIRECT_SOURCE_WORD_LIMIT
+  );
+}
+
+function splitIntoChunks(sourceText: string) {
+  const normalized = sanitizeSourceText(sourceText);
+  const paragraphs = normalized
+    .split(/\n\n+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  const chunks: string[] = [];
+  let current = "";
+
+  const pushCurrent = () => {
+    if (current.trim()) {
+      chunks.push(current.trim());
+      current = "";
+    }
+  };
+
+  const splitOversizedParagraph = (paragraph: string) => {
+    const sentences = paragraph.match(/[^.!?\n]+[.!?]?/g)?.map((item) => item.trim()).filter(Boolean) ?? [paragraph];
+    let sentenceChunk = "";
+
+    for (const sentence of sentences) {
+      const candidate = sentenceChunk ? `${sentenceChunk} ${sentence}` : sentence;
+      if (candidate.length <= CHUNK_CHARACTER_TARGET) {
+        sentenceChunk = candidate;
+        continue;
+      }
+
+      if (sentenceChunk) {
+        chunks.push(sentenceChunk.trim());
+      }
+
+      if (sentence.length <= CHUNK_CHARACTER_TARGET) {
+        sentenceChunk = sentence;
+        continue;
+      }
+
+      let start = 0;
+      while (start < sentence.length) {
+        const slice = sentence.slice(start, start + CHUNK_CHARACTER_TARGET);
+        chunks.push(slice.trim());
+        start += CHUNK_CHARACTER_TARGET;
+      }
+      sentenceChunk = "";
+    }
+
+    if (sentenceChunk.trim()) {
+      chunks.push(sentenceChunk.trim());
+    }
+  };
+
+  for (const paragraph of paragraphs) {
+    if (paragraph.length > CHUNK_CHARACTER_HARD_LIMIT) {
+      pushCurrent();
+      splitOversizedParagraph(paragraph);
+      continue;
+    }
+
+    const candidate = current ? `${current}\n\n${paragraph}` : paragraph;
+    if (candidate.length <= CHUNK_CHARACTER_TARGET) {
+      current = candidate;
+    } else {
+      pushCurrent();
+      current = paragraph;
+    }
+  }
+
+  pushCurrent();
+
+  return chunks.length ? chunks : [limitCharacters(normalized, CHUNK_CHARACTER_TARGET)];
+}
+
+function buildChunkSummaryPrompt(input: {
+  sourceTitle: string;
+  chunkText: string;
+  chunkIndex: number;
+  totalChunks: number;
+}) {
+  return `
+You are compressing one chunk of a long source before a later content-generation step.
+
+Goal:
+- Preserve the most important facts, claims, examples, numbers, and takeaways from this chunk only.
+- Remove repetition, filler, and tangents.
+- Do not invent details.
+- Do not add outside knowledge.
+
+Output rules:
+- Return exactly one valid JSON object.
+- Use the key "summary".
+- Write a compact but information-dense summary in plain text.
+- Prefer short paragraphs or semicolon-separated sentences over bullets.
+- Keep names, numbers, dates, examples, and concrete insights when present.
+- Stay grounded in this chunk only.
+
+Source title:
+"""
+${input.sourceTitle}
+"""
+
+Chunk ${input.chunkIndex} of ${input.totalChunks}:
+"""
+${limitCharacters(input.chunkText, 9000)}
+"""
+
+Return JSON in this exact shape:
+{
+  "summary": "compressed chunk summary"
+}
+  `.trim();
+}
+
+function buildMasterSummaryPrompt(input: {
+  sourceTitle: string;
+  chunkSummaries: string[];
+}) {
+  return `
+You are merging chunk summaries from one long source into a single master source summary for later repurposing.
+
+Goal:
+- Combine the chunk summaries into one faithful, compact master summary.
+- Preserve major themes, strongest examples, names, numbers, dates, and important nuance.
+- Remove repetition and overlap.
+- Keep the result rich enough for content generation across multiple platforms.
+- Do not invent details or add outside knowledge.
+
+Output rules:
+- Return exactly one valid JSON object.
+- Use the key "summary".
+- Write clear plain text, not markdown.
+- Keep it concise but information-dense.
+- Favor readable paragraphs over bullets.
+
+Source title:
+"""
+${input.sourceTitle}
+"""
+
+Chunk summaries:
+"""
+${input.chunkSummaries.map((summary, index) => `[Chunk ${index + 1}] ${summary}`).join("\n\n")}
+"""
+
+Return JSON in this exact shape:
+{
+  "summary": "master summary"
+}
+  `.trim();
+}
+
+async function requestSummary(prompt: string, maxOutputTokens: number) {
+  const client = getClient();
+  const model = getModelName();
+
+  const response = await client.models.generateContent({
+    model,
+    contents: prompt,
+    config: {
+      responseMimeType: "application/json",
+      responseJsonSchema: {
+        type: "object",
+        additionalProperties: false,
+        required: ["summary"],
+        properties: {
+          summary: {
+            type: "string"
+          }
+        }
+      },
+      temperature: 0.2,
+      maxOutputTokens
+    }
+  });
+
+  const rawText = extractResponseText(response);
+
+  if (!rawText) {
+    throw new Error("The model returned an empty response.");
+  }
+
+  const parsed = parseSummaryJson(rawText);
+  return parsed.summary.trim();
+}
+
+async function compressLongSource(input: {
+  sourceTitle: string;
+  sourceText: string;
+}) {
+  const chunks = splitIntoChunks(input.sourceText);
+
+  if (chunks.length === 1 && chunks[0] && chunks[0].length <= DIRECT_SOURCE_CHARACTER_LIMIT) {
+    return sanitizeSourceText(chunks[0]);
+  }
+
+  const chunkSummaries: string[] = [];
+
+  for (const [index, chunkText] of chunks.entries()) {
+    const summary = await requestSummary(
+      buildChunkSummaryPrompt({
+        sourceTitle: input.sourceTitle,
+        chunkText,
+        chunkIndex: index + 1,
+        totalChunks: chunks.length
+      }),
+      1100
+    );
+
+    chunkSummaries.push(limitCharacters(summary, CHUNK_SUMMARY_CHARACTER_LIMIT));
+  }
+
+  const mergedSummary =
+    chunkSummaries.length === 1
+      ? chunkSummaries[0]
+      : await requestSummary(
+          buildMasterSummaryPrompt({
+            sourceTitle: input.sourceTitle,
+            chunkSummaries
+          }),
+          2200
+        );
+
+  return limitCharacters(sanitizeSourceText(mergedSummary), MASTER_SUMMARY_CHARACTER_LIMIT);
+}
+
+async function prepareSourceText(input: {
+  sourceTitle: string;
+  sourceText: string;
+}) {
+  const normalized = sanitizeSourceText(input.sourceText);
+
+  if (!needsCompression(normalized)) {
+    return normalized;
+  }
+
+  return await compressLongSource({
+    sourceTitle: input.sourceTitle,
+    sourceText: normalized
+  });
+}
+
 async function requestGeneration(input: {
   sourceTitle: string;
   sourceText: string;
@@ -323,8 +607,16 @@ export async function generateRepurposedContent(input: {
   lengthPreset: LengthPreset;
   platforms: ContentPlatform[];
 }) {
+  const preparedSourceText = await prepareSourceText({
+    sourceTitle: input.sourceTitle,
+    sourceText: input.sourceText
+  });
+
   try {
-    return await requestGeneration(input);
+    return await requestGeneration({
+      ...input,
+      sourceText: preparedSourceText
+    });
   } catch (error) {
     if (
       error instanceof Error &&
@@ -333,6 +625,7 @@ export async function generateRepurposedContent(input: {
     ) {
       return await requestGeneration({
         ...input,
+        sourceText: preparedSourceText,
         retryMode: true
       });
     }
