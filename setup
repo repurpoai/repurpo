@@ -149,3 +149,11 @@ Cloudflare image generation
 Dodo Payments checkout
 Dodo Payments webhook-driven plan activation
 Dodo Payments customer portal
+
+
+Security / bot protection
+- Add Cloudflare Turnstile keys in Vercel:
+  NEXT_PUBLIC_TURNSTILE_SITE_KEY
+  TURNSTILE_SECRET_KEY
+- Run supabase/v2_upgrade.sql again to create auth_rate_limits for login throttling.
+- In Supabase dashboard also turn on Bot and Abuse Protection with Cloudflare Turnstile and tighten Authentication > Rate Limits.

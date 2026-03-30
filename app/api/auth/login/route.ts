@@ -1,0 +1,132 @@
+import { cookies } from "next/headers";
+import { NextResponse } from "next/server";
+import { createServerClient } from "@supabase/ssr";
+import { z } from "zod";
+import {
+  assertLoginAllowed,
+  clearLoginFailures,
+  getClientIp,
+  recordLoginFailure,
+  verifyTurnstileToken
+} from "@/lib/security";
+
+const loginSchema = z.object({
+  email: z.string().trim().email("Enter a valid email address."),
+  password: z.string().min(6, "Password must be at least 6 characters."),
+  captchaToken: z.string().trim().min(1, "Complete the security check and try again.")
+});
+
+export async function POST(request: Request) {
+  try {
+    const formData = await request.formData();
+    const parsed = loginSchema.safeParse({
+      email: formData.get("email"),
+      password: formData.get("password"),
+      captchaToken: formData.get("captchaToken")
+    });
+
+    if (!parsed.success) {
+      return NextResponse.json(
+        {
+          error: parsed.error.issues[0]?.message ?? "Invalid login details."
+        },
+        { status: 400 }
+      );
+    }
+
+    const { email, password, captchaToken } = parsed.data;
+    const ip = await getClientIp();
+    const gate = await assertLoginAllowed(email, ip);
+
+    if (!gate.allowed) {
+      return NextResponse.json(
+        {
+          error: "Too many login attempts. Try again later."
+        },
+        {
+          status: 429,
+          headers: {
+            "Retry-After": String(gate.retryAfterSeconds)
+          }
+        }
+      );
+    }
+
+    const turnstile = await verifyTurnstileToken(captchaToken, ip);
+
+    if (!turnstile.success) {
+      return NextResponse.json(
+        {
+          error: turnstile.error
+        },
+        { status: 400 }
+      );
+    }
+
+    const cookieStore = await cookies();
+    const cookiesToSet: Array<{
+      name: string;
+      value: string;
+      options?: Parameters<typeof cookieStore.set>[2];
+    }> = [];
+
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
+      {
+        cookies: {
+          getAll() {
+            return cookieStore.getAll();
+          },
+          setAll(newCookies) {
+            newCookies.forEach(({ name, value, options }) => {
+              cookiesToSet.push({ name, value, options });
+            });
+          }
+        }
+      }
+    );
+
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password
+    });
+
+    if (error) {
+      const failure = await recordLoginFailure(email, ip);
+      const status = failure.blocked ? 429 : 401;
+
+      return NextResponse.json(
+        {
+          error: failure.blocked
+            ? "Too many login attempts. Try again later."
+            : "Invalid login details."
+        },
+        status === 429
+          ? {
+              status,
+              headers: {
+                "Retry-After": String(failure.retryAfterSeconds ?? 60)
+              }
+            }
+          : { status }
+      );
+    }
+
+    await clearLoginFailures(email, ip);
+
+    const response = NextResponse.json({ ok: true, redirectTo: "/dashboard" });
+    cookiesToSet.forEach(({ name, value, options }) => {
+      response.cookies.set(name, value, options);
+    });
+
+    return response;
+  } catch (error) {
+    return NextResponse.json(
+      {
+        error: error instanceof Error ? error.message : "Login failed."
+      },
+      { status: 500 }
+    );
+  }
+}

@@ -1,20 +1,52 @@
 "use client";
 
-import { useActionState } from "react";
+import { FormEvent, useState } from "react";
 import { LoaderCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { loginAction, type AuthActionState } from "@/app/auth/actions";
-
-const initialAuthActionState: AuthActionState = {
-  error: null
-};
+import { TurnstileWidget } from "@/components/turnstile-widget";
 
 export function LoginForm() {
-  const [state, formAction, pending] = useActionState(loginAction, initialAuthActionState);
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [captchaToken, setCaptchaToken] = useState("");
+  const [resetSignal, setResetSignal] = useState(0);
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setPending(true);
+    setError(null);
+
+    try {
+      const formData = new FormData(event.currentTarget);
+      formData.set("captchaToken", captchaToken);
+
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        body: formData
+      });
+
+      const payload = (await response.json().catch(() => null)) as
+        | { error?: string; redirectTo?: string }
+        | null;
+
+      if (!response.ok) {
+        setError(payload?.error ?? "Login failed.");
+        setResetSignal((value) => value + 1);
+        return;
+      }
+
+      window.location.assign(payload?.redirectTo ?? "/dashboard");
+    } catch {
+      setError("Login failed. Try again.");
+      setResetSignal((value) => value + 1);
+    } finally {
+      setPending(false);
+    }
+  }
 
   return (
-    <form action={formAction} className="space-y-4">
+    <form onSubmit={handleSubmit} className="space-y-4">
       <div className="space-y-2">
         <label htmlFor="login-email" className="text-sm font-medium text-slate-700">
           Email
@@ -45,13 +77,15 @@ export function LoginForm() {
         />
       </div>
 
-      {state.error ? (
+      <TurnstileWidget action="login" onTokenChange={setCaptchaToken} resetSignal={resetSignal} />
+
+      {error ? (
         <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {state.error}
+          {error}
         </div>
       ) : null}
 
-      <Button type="submit" className="w-full" disabled={pending}>
+      <Button type="submit" className="w-full" disabled={pending || !captchaToken}>
         {pending ? (
           <>
             <LoaderCircle className="h-4 w-4 animate-spin" />

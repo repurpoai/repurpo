@@ -59,6 +59,18 @@ create table if not exists public.image_generations (
 );
 
 
+
+create table if not exists public.auth_rate_limits (
+  key text primary key,
+  scope text not null check (scope in ('login_ip', 'login_email')),
+  attempt_count integer not null default 0,
+  window_started_at timestamptz not null default timezone('utc', now()),
+  last_attempt_at timestamptz not null default timezone('utc', now()),
+  blocked_until timestamptz,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
 create table if not exists public.billing_webhook_events (
   id text primary key,
   event_type text not null,
@@ -71,6 +83,8 @@ create index if not exists generations_user_id_created_at_idx on public.generati
 create index if not exists image_generations_user_id_idx on public.image_generations (user_id);
 create index if not exists image_generations_created_at_idx on public.image_generations (created_at desc);
 create index if not exists image_generations_user_id_created_at_idx on public.image_generations (user_id, created_at desc);
+create index if not exists auth_rate_limits_scope_idx on public.auth_rate_limits (scope);
+create index if not exists auth_rate_limits_blocked_until_idx on public.auth_rate_limits (blocked_until);
 
 create or replace function public.handle_new_user()
 returns trigger
@@ -125,6 +139,12 @@ execute function public.set_updated_at();
 drop trigger if exists set_image_generations_updated_at on public.image_generations;
 create trigger set_image_generations_updated_at
 before update on public.image_generations
+for each row
+execute function public.set_updated_at();
+
+drop trigger if exists set_auth_rate_limits_updated_at on public.auth_rate_limits;
+create trigger set_auth_rate_limits_updated_at
+before update on public.auth_rate_limits
 for each row
 execute function public.set_updated_at();
 

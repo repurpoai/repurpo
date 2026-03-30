@@ -123,3 +123,24 @@ create table if not exists public.billing_webhook_events (
 );
 
 alter table public.billing_webhook_events enable row level security;
+
+
+create table if not exists public.auth_rate_limits (
+  key text primary key,
+  scope text not null check (scope in ('login_ip', 'login_email')),
+  attempt_count integer not null default 0,
+  window_started_at timestamptz not null default timezone('utc', now()),
+  last_attempt_at timestamptz not null default timezone('utc', now()),
+  blocked_until timestamptz,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
+create index if not exists auth_rate_limits_scope_idx on public.auth_rate_limits (scope);
+create index if not exists auth_rate_limits_blocked_until_idx on public.auth_rate_limits (blocked_until);
+
+drop trigger if exists set_auth_rate_limits_updated_at on public.auth_rate_limits;
+create trigger set_auth_rate_limits_updated_at
+before update on public.auth_rate_limits
+for each row
+execute function public.set_updated_at();
