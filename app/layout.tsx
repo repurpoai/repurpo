@@ -13,7 +13,10 @@ export const metadata: Metadata = {
     template: "%s | Repurpo"
   },
   description:
-    "Turn one source into a LinkedIn post, X thread, and newsletter with plan-aware SaaS limits and saved history."
+    "Turn one source into a LinkedIn post, X thread, and newsletter with plan-aware SaaS limits and saved history.",
+  other: {
+    "breachme-verify": "breachme-verify=repurpo-five-vercel-app-8321971daecae436",
+  },
 };
 
 export default function RootLayout({
