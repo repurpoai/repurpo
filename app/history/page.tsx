@@ -49,7 +49,7 @@ export default async function HistoryPage() {
     redirect("/login");
   }
 
-  const upgradeHref = process.env.NEXT_PUBLIC_PRO_UPGRADE_URL?.trim() || "/pricing";
+  const upgradeHref = "/pricing";
 
   const supabase = await createClient();
   const { data, error } = await supabase

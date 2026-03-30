@@ -10,7 +10,7 @@ export default async function DashboardPage() {
     redirect("/login");
   }
 
-  const upgradeHref = process.env.NEXT_PUBLIC_PRO_UPGRADE_URL?.trim() || "/pricing";
+  const upgradeHref = "/pricing";
 
   return (
     <main className="min-h-screen bg-slate-100">

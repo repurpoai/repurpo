@@ -3,16 +3,23 @@ import { Crown, Mail, Sparkles, User } from "lucide-react";
 import { Sidebar } from "@/components/sidebar";
 import { PlanBadge } from "@/components/plan-badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { formatDateTime } from "@/lib/utils";
 import { getViewerContext } from "@/lib/viewer";
 
-export default async function ProfilePage() {
+export default async function ProfilePage({
+  searchParams
+}: {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const viewer = await getViewerContext();
 
   if (!viewer) {
     redirect("/login");
   }
 
-  const upgradeHref = process.env.NEXT_PUBLIC_PRO_UPGRADE_URL?.trim() || "/pricing";
+  const params = (await searchParams) ?? {};
+  const billingMessage = Array.isArray(params.billing) ? params.billing[0] : params.billing;
+  const upgradeHref = "/pricing";
 
   return (
     <main className="min-h-screen bg-slate-100">
@@ -39,10 +46,26 @@ export default async function ProfilePage() {
               </div>
               <CardTitle className="text-3xl text-white">Account overview</CardTitle>
               <CardDescription className="text-slate-300">
-                Your plan, usage, and upgrade status.
+                Your plan, usage, and billing status.
               </CardDescription>
             </CardHeader>
           </Card>
+
+          {billingMessage === "error" ? (
+            <Card className="border-0 bg-white shadow-soft">
+              <CardContent className="py-5 text-sm text-red-600">
+                We could not open the Dodo Payments customer portal right now. Please try again.
+              </CardContent>
+            </Card>
+          ) : null}
+
+          {billingMessage === "unavailable" ? (
+            <Card className="border-0 bg-white shadow-soft">
+              <CardContent className="py-5 text-sm text-slate-600">
+                Billing portal is only available after your paid subscription has been activated.
+              </CardContent>
+            </Card>
+          ) : null}
 
           <Card className="border-0 bg-white shadow-soft">
             <CardHeader>
@@ -63,6 +86,14 @@ export default async function ProfilePage() {
                 <div className="space-y-2">
                   <div className="text-sm text-slate-500">Current plan</div>
                   <PlanBadge tier={viewer.tier} />
+                  <div className="text-sm text-slate-500">
+                    Billing status: <span className="font-medium text-slate-900 capitalize">{viewer.billingStatus.replace("_", " ")}</span>
+                  </div>
+                  {viewer.billingCurrentPeriodEnd ? (
+                    <div className="text-sm text-slate-500">
+                      Current paid period ends: <span className="font-medium text-slate-900">{formatDateTime(viewer.billingCurrentPeriodEnd)}</span>
+                    </div>
+                  ) : null}
                 </div>
               </div>
 
@@ -88,14 +119,25 @@ export default async function ProfilePage() {
                 </div>
               </div>
 
-              {viewer.tier === "free" ? (
-                <a
-                  href={upgradeHref}
-                  className="inline-flex h-11 items-center justify-center rounded-xl bg-slate-950 px-4 text-sm font-medium text-white transition hover:bg-slate-800"
-                >
-                  Upgrade
-                </a>
-              ) : null}
+              <div className="flex flex-wrap gap-3">
+                {viewer.tier === "free" ? (
+                  <a
+                    href={upgradeHref}
+                    className="inline-flex h-11 items-center justify-center rounded-xl bg-slate-950 px-4 text-sm font-medium text-white transition hover:bg-slate-800"
+                  >
+                    Upgrade
+                  </a>
+                ) : null}
+
+                {viewer.billingCustomerId ? (
+                  <a
+                    href="/api/customer-portal"
+                    className="inline-flex h-11 items-center justify-center rounded-xl border border-slate-200 px-4 text-sm font-medium text-slate-900 transition hover:bg-slate-50"
+                  >
+                    Manage billing
+                  </a>
+                ) : null}
+              </div>
             </CardContent>
           </Card>
         </section>

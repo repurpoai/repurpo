@@ -19,6 +19,10 @@ export type ViewerContext = {
   imageUsedThisMonth: number;
   imageRemainingThisMonth: number | null;
   usageWindowLabel: string;
+  billingStatus: "inactive" | "active" | "past_due" | "canceled";
+  billingCustomerId: string | null;
+  billingSubscriptionId: string | null;
+  billingCurrentPeriodEnd: string | null;
   isPaid: boolean;
   isPro: boolean;
 };
@@ -35,7 +39,9 @@ export async function getViewerContext(): Promise<ViewerContext | null> {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("full_name, tier, monthly_generation_limit")
+    .select(
+      "full_name, tier, monthly_generation_limit, billing_status, billing_customer_id, billing_subscription_id, billing_current_period_end"
+    )
     .eq("id", userId)
     .maybeSingle();
 
@@ -73,6 +79,13 @@ export async function getViewerContext(): Promise<ViewerContext | null> {
   const imageRemainingThisMonth =
     imageMonthlyLimit === null ? null : Math.max(imageMonthlyLimit - imageUsedThisMonth, 0);
 
+  const billingStatus =
+    profile?.billing_status === "active" ||
+    profile?.billing_status === "past_due" ||
+    profile?.billing_status === "canceled"
+      ? profile.billing_status
+      : "inactive";
+
   return {
     userId,
     email,
@@ -85,6 +98,12 @@ export async function getViewerContext(): Promise<ViewerContext | null> {
     imageUsedThisMonth,
     imageRemainingThisMonth,
     usageWindowLabel: label,
+    billingStatus,
+    billingCustomerId: typeof profile?.billing_customer_id === "string" ? profile.billing_customer_id : null,
+    billingSubscriptionId:
+      typeof profile?.billing_subscription_id === "string" ? profile.billing_subscription_id : null,
+    billingCurrentPeriodEnd:
+      typeof profile?.billing_current_period_end === "string" ? profile.billing_current_period_end : null,
     isPaid: tier !== "free",
     isPro: tier === "pro"
   };

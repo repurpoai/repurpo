@@ -110,3 +110,16 @@ on public.image_generations
 for delete
 to authenticated
 using (auth.uid() = user_id);
+
+
+alter table public.profiles
+add column if not exists billing_current_period_end timestamptz;
+
+
+create table if not exists public.billing_webhook_events (
+  id text primary key,
+  event_type text not null,
+  created_at timestamptz not null default timezone('utc', now())
+);
+
+alter table public.billing_webhook_events enable row level security;

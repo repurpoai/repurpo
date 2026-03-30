@@ -23,6 +23,7 @@ create table if not exists public.profiles (
   ),
   billing_customer_id text,
   billing_subscription_id text,
+  billing_current_period_end timestamptz,
   created_at timestamptz not null default timezone('utc', now()),
   updated_at timestamptz not null default timezone('utc', now())
 );
@@ -55,6 +56,13 @@ create table if not exists public.image_generations (
   model_name text not null,
   created_at timestamptz not null default timezone('utc', now()),
   updated_at timestamptz not null default timezone('utc', now())
+);
+
+
+create table if not exists public.billing_webhook_events (
+  id text primary key,
+  event_type text not null,
+  created_at timestamptz not null default timezone('utc', now())
 );
 
 create index if not exists generations_user_id_idx on public.generations (user_id);
@@ -123,6 +131,7 @@ execute function public.set_updated_at();
 alter table public.profiles enable row level security;
 alter table public.generations enable row level security;
 alter table public.image_generations enable row level security;
+alter table public.billing_webhook_events enable row level security;
 
 drop policy if exists "profiles_select_own" on public.profiles;
 create policy "profiles_select_own"

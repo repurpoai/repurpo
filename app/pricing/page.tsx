@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Crown, Sparkles } from "lucide-react";
+import { CheckoutButton } from "@/components/checkout-button";
 import { PlanBadge } from "@/components/plan-badge";
 import { Sidebar } from "@/components/sidebar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,7 +9,6 @@ import { getViewerContext } from "@/lib/viewer";
 
 export default async function PricingPage() {
   const viewer = await getViewerContext();
-  const upgradeHref = process.env.NEXT_PUBLIC_PRO_UPGRADE_URL?.trim() || "/pricing";
 
   const pricingContent = (
     <div className="space-y-6">
@@ -20,7 +20,7 @@ export default async function PricingPage() {
           </div>
           <CardTitle className="text-3xl text-white">Free, Plus, and Pro</CardTitle>
           <CardDescription className="text-slate-300">
-            Free gets 1 image a month, Plus gets 5, and Pro removes the cap.
+            Free gets 1 image a month, Plus gets 5, and Pro removes the cap. Paid plans are activated automatically after Dodo Payments confirms the subscription.
           </CardDescription>
         </CardHeader>
       </Card>
@@ -61,13 +61,22 @@ export default async function PricingPage() {
                   >
                     {viewer ? "Back to dashboard" : "Start free"}
                   </Link>
+                ) : viewer?.tier === "pro" && tier === "plus" ? (
+                  <div className="inline-flex h-11 items-center justify-center rounded-xl border border-slate-200 px-4 text-sm font-medium text-slate-500">
+                    Included in Pro
+                  </div>
+                ) : viewer ? (
+                  <CheckoutButton
+                    plan={tier}
+                    label={tier === "plus" ? "Buy Plus" : viewer.tier === "plus" ? "Upgrade to Pro" : "Buy Pro"}
+                  />
                 ) : (
-                  <a
-                    href={upgradeHref}
+                  <Link
+                    href="/signup"
                     className="inline-flex h-11 items-center justify-center rounded-xl bg-slate-950 px-4 text-sm font-medium text-white transition hover:bg-slate-800"
                   >
-                    Upgrade
-                  </a>
+                    Sign up to continue
+                  </Link>
                 )}
               </div>
             </CardContent>

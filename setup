@@ -3,6 +3,7 @@
 Fill these environment variables:
 NEXT_PUBLIC_SUPABASE_URL
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+SUPABASE_SERVICE_ROLE_KEY
 GEMINI_API_KEY
 GEMINI_MODEL
 SUPADATA_API_KEY
@@ -12,10 +13,13 @@ SERPAPI_BASE_URL
 CLOUDFLARE_ACCOUNT_ID
 CLOUDFLARE_API_TOKEN
 CLOUDFLARE_AI_IMAGE_MODEL
-NEXT_PUBLIC_PRO_UPGRADE_URL
-
-What NEXT_PUBLIC_PRO_UPGRADE_URL does:
-All paid upgrade buttons point to this URL. You can use one checkout link for Plus / Pro, a billing page, or any custom upgrade destination. If you leave it empty, upgrade buttons fall back to /pricing.
+DODO_PAYMENTS_API_KEY
+DODO_PAYMENTS_WEBHOOK_KEY
+DODO_PAYMENTS_ENVIRONMENT
+DODO_PAYMENTS_RETURN_URL
+DODO_PAYMENTS_PORTAL_RETURN_URL
+DODO_PAYMENTS_PLUS_PRODUCT_ID
+DODO_PAYMENTS_PRO_PRODUCT_ID
 
 Supabase setup for a fresh project:
 Create a Supabase project.
@@ -28,6 +32,7 @@ If you already created the database from the older Version 1 schema, run supabas
 In Project Settings → API, copy:
 Project URL
 Publishable key
+Service role key
 
 In Authentication → Providers → Email, keep email/password enabled.
 Disable Confirm Email if you want signup to land in the dashboard immediately.
@@ -37,6 +42,7 @@ Free users get:
 tier = 'free'
 monthly_generation_limit = 5
 image limit = 1 per month
+billing_status = 'inactive'
 
 Plus users get:
 tier = 'plus'
@@ -49,6 +55,34 @@ tier = 'pro'
 monthly_generation_limit = null
 image limit = unlimited
 billing_status = 'active'
+
+Dodo Payments setup:
+Create two subscription products in Dodo Payments: one for Plus and one for Pro.
+Copy the product IDs into DODO_PAYMENTS_PLUS_PRODUCT_ID and DODO_PAYMENTS_PRO_PRODUCT_ID.
+Create an API key in Developer → API Keys and copy it into DODO_PAYMENTS_API_KEY.
+Create a webhook in Settings → Webhooks.
+Set the endpoint to:
+https://your-domain.com/api/dodo/webhook
+Subscribe to at least these events:
+payment.succeeded
+subscription.active
+subscription.updated
+subscription.renewed
+subscription.plan_changed
+subscription.on_hold
+subscription.failed
+subscription.cancelled
+subscription.expired
+Copy the webhook secret into DODO_PAYMENTS_WEBHOOK_KEY.
+Set DODO_PAYMENTS_ENVIRONMENT to test_mode while testing and live_mode in production.
+Set DODO_PAYMENTS_RETURN_URL to your deployed success page, usually https://your-domain.com/checkout/success.
+Set DODO_PAYMENTS_PORTAL_RETURN_URL to your profile page, usually https://your-domain.com/profile.
+
+What the Dodo integration does in this build:
+Pricing buttons create a real checkout session on your server.
+Checkout metadata stores the selected plan and your Supabase user id.
+After payment, the Dodo webhook updates public.profiles automatically.
+Paid users can open the Dodo customer portal from Profile once billing_customer_id exists.
 
 Manual upgrade SQL for testing paid plans:
 update public.profiles
@@ -112,3 +146,6 @@ multi-platform generation
 YouTube transcript fallback chain (Supadata -> SerpApi -> youtube-transcript)
 Gemini text generation
 Cloudflare image generation
+Dodo Payments checkout
+Dodo Payments webhook-driven plan activation
+Dodo Payments customer portal
