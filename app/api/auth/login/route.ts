@@ -2,13 +2,11 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { z } from "zod";
+import { assertTrustedOrigin, jsonNoStore, normalizeCookieOptions } from "@/lib/http-security";
 import {
   assertLoginAllowed,
-  assertTrustedOrigin,
   clearLoginFailures,
   getClientIp,
-  jsonNoStore,
-  normalizeCookieOptions,
   recordLoginFailure,
   verifyTurnstileToken
 } from "@/lib/security";

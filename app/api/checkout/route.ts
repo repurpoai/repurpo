@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { assertTrustedOrigin, jsonNoStore } from "@/lib/security";
+import { assertTrustedOrigin, jsonNoStore } from "@/lib/http-security";
 import { checkoutPlanSchema, getDodoBaseUrl, getDodoPlanProductId, getDodoReturnUrl } from "@/lib/dodo";
 
 export async function POST(request: Request) {

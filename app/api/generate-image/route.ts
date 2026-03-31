@@ -2,7 +2,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { generateImageFromPrompt } from "@/lib/cloudflare-image";
-import { assertTrustedOrigin, jsonNoStore } from "@/lib/security";
+import { assertTrustedOrigin, jsonNoStore } from "@/lib/http-security";
 import { getViewerContext } from "@/lib/viewer";
 
 const bodySchema = z.object({

@@ -7,7 +7,7 @@ import {
   jsonNoStore,
   normalizeCookieOptions,
   verifyTurnstileToken
-} from "@/lib/security";
+} from "@/lib/http-security";
 
 const signupSchema = z.object({
   fullName: z.string().trim().max(80, "Full name is too long.").optional(),

@@ -1,6 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
-import { applyPrivateNoStore, normalizeCookieOptions } from "@/lib/security";
+import { applyPrivateNoStore, normalizeCookieOptions } from "@/lib/http-security";
 
 function copyCookies(from: NextResponse, to: NextResponse) {
   from.cookies.getAll().forEach((cookie) => {
