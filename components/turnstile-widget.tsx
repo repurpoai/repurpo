@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Script from "next/script";
 
 declare global {
@@ -39,20 +39,32 @@ export function TurnstileWidget({
   const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
   const widgetContainerRef = useRef<HTMLDivElement | null>(null);
   const widgetIdRef = useRef<string | null>(null);
+  const retryTimeoutRef = useRef<number | null>(null);
   const [token, setToken] = useState("");
   const [scriptReady, setScriptReady] = useState(false);
-  const [isRendering, setIsRendering] = useState(true);
   const [renderError, setRenderError] = useState<string | null>(null);
   const stableAction = useMemo(() => action, [action]);
 
-  const renderWidget = useCallback(() => {
-    if (!siteKey || !widgetContainerRef.current || !window.turnstile || widgetIdRef.current) {
-      return false;
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.turnstile) {
+      setScriptReady(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    const container = widgetContainerRef.current;
+
+    if (!siteKey || !scriptReady || !container || !window.turnstile) {
+      return;
+    }
+
+    if (widgetIdRef.current) {
+      return;
     }
 
     try {
-      widgetContainerRef.current.innerHTML = "";
-      widgetIdRef.current = window.turnstile.render(widgetContainerRef.current, {
+      setRenderError(null);
+      widgetIdRef.current = window.turnstile.render(container, {
         sitekey: siteKey,
         action: stableAction,
         theme: "light",
@@ -60,7 +72,6 @@ export function TurnstileWidget({
           setToken(nextToken);
           onTokenChange?.(nextToken);
           setRenderError(null);
-          setIsRendering(false);
         },
         "expired-callback": () => {
           setToken("");
@@ -70,44 +81,20 @@ export function TurnstileWidget({
           setToken("");
           onTokenChange?.("");
           setRenderError("Security check failed to load. Refresh and try again.");
-          setIsRendering(false);
         }
       });
-
-      setRenderError(null);
-      setIsRendering(false);
-      return true;
     } catch {
       setRenderError("Security check failed to load. Refresh and try again.");
-      setIsRendering(false);
-      return false;
-    }
-  }, [onTokenChange, siteKey, stableAction]);
 
-  useEffect(() => {
-    if (typeof window !== "undefined" && window.turnstile) {
-      setScriptReady(true);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!siteKey || !scriptReady) {
-      return;
-    }
-
-    if (renderWidget()) {
-      return;
-    }
-
-    const timeoutId = window.setTimeout(() => {
-      if (!renderWidget()) {
-        setRenderError("Security check failed to load. Refresh and try again.");
-        setIsRendering(false);
+      if (retryTimeoutRef.current === null) {
+        retryTimeoutRef.current = window.setTimeout(() => {
+          widgetIdRef.current = null;
+          retryTimeoutRef.current = null;
+          setScriptReady(Boolean(window.turnstile));
+        }, 1200);
       }
-    }, 1200);
-
-    return () => window.clearTimeout(timeoutId);
-  }, [renderWidget, scriptReady, siteKey]);
+    }
+  }, [onTokenChange, scriptReady, siteKey, stableAction]);
 
   useEffect(() => {
     if (!widgetIdRef.current || !window.turnstile) {
@@ -118,11 +105,14 @@ export function TurnstileWidget({
     setToken("");
     onTokenChange?.("");
     setRenderError(null);
-    setIsRendering(false);
   }, [onTokenChange, resetSignal]);
 
   useEffect(() => {
     return () => {
+      if (retryTimeoutRef.current !== null) {
+        window.clearTimeout(retryTimeoutRef.current);
+      }
+
       if (widgetIdRef.current && window.turnstile) {
         window.turnstile.remove(widgetIdRef.current);
       }
@@ -147,14 +137,12 @@ export function TurnstileWidget({
           setRenderError(null);
         }}
         onError={() => {
+          setScriptReady(false);
           setRenderError("Security check failed to load. Refresh and try again.");
-          setIsRendering(false);
         }}
       />
-      <div ref={widgetContainerRef} className="min-h-[66px]" />
-      {isRendering && !renderError ? (
-        <p className="text-sm text-slate-500">Loading security check…</p>
-      ) : null}
+      {!scriptReady ? <p className="text-sm text-slate-500">Loading security check…</p> : null}
+      <div ref={widgetContainerRef} />
       <input type="hidden" name={name} value={token} readOnly />
       {renderError ? <p className="text-sm text-red-600">{renderError}</p> : null}
     </div>

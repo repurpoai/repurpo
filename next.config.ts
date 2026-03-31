@@ -2,12 +2,17 @@ import type { NextConfig } from "next";
 
 const isDev = process.env.NODE_ENV === "development";
 
-const sharedDirectives = [
+const contentSecurityPolicy = [
   "default-src 'self'",
   "base-uri 'self'",
   "form-action 'self'",
   "frame-ancestors 'none'",
   "object-src 'none'",
+  // Next.js App Router still relies on some inline bootstrap/runtime scripts for hydration.
+  // Keeping 'unsafe-inline' here restores client-side interactivity (menu, auth forms, etc.)
+  // while we preserve the rest of the hardening headers.
+  `script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com${isDev ? " 'unsafe-eval'" : ""}`,
+  `script-src-elem 'self' 'unsafe-inline' https://challenges.cloudflare.com${isDev ? " 'unsafe-eval'" : ""}`,
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob: https:",
   "font-src 'self' data: https:",
@@ -17,23 +22,9 @@ const sharedDirectives = [
   "worker-src 'self' blob:",
   "manifest-src 'self'",
   "upgrade-insecure-requests"
-];
-
-const strictContentSecurityPolicy = [
-  ...sharedDirectives.slice(0, 5),
-  `script-src 'self' https://challenges.cloudflare.com${isDev ? " 'unsafe-eval'" : ""}`,
-  `script-src-elem 'self' https://challenges.cloudflare.com${isDev ? " 'unsafe-eval'" : ""}`,
-  ...sharedDirectives.slice(5)
 ].join("; ");
 
-const authContentSecurityPolicy = [
-  ...sharedDirectives.slice(0, 5),
-  `script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com${isDev ? " 'unsafe-eval'" : ""}`,
-  `script-src-elem 'self' 'unsafe-inline' https://challenges.cloudflare.com${isDev ? " 'unsafe-eval'" : ""}`,
-  ...sharedDirectives.slice(5)
-].join("; ");
-
-const buildSecurityHeaders = (contentSecurityPolicy: string) => [
+const securityHeaders = [
   {
     key: "Content-Security-Policy",
     value: contentSecurityPolicy.replace(/\s{2,}/g, " ").trim()
@@ -77,25 +68,12 @@ const buildSecurityHeaders = (contentSecurityPolicy: string) => [
 ];
 
 const nextConfig: NextConfig = {
-  experimental: {
-    sri: {
-      algorithm: "sha256"
-    }
-  },
   serverExternalPackages: ["jsdom", "@mozilla/readability"],
   async headers() {
     return [
       {
-        source: "/login",
-        headers: buildSecurityHeaders(authContentSecurityPolicy)
-      },
-      {
-        source: "/signup",
-        headers: buildSecurityHeaders(authContentSecurityPolicy)
-      },
-      {
         source: "/(.*)",
-        headers: buildSecurityHeaders(strictContentSecurityPolicy)
+        headers: securityHeaders
       }
     ];
   }
