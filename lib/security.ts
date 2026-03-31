@@ -1,7 +1,6 @@
 import crypto from "node:crypto";
 import { headers } from "next/headers";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { jsonNoStore } from "@/lib/http-security";
 
 type RateLimitScope = "login_ip" | "login_email";
 
@@ -30,6 +29,20 @@ function sha256(value: string) {
 
 function makeKey(scope: RateLimitScope, rawValue: string) {
   return `${scope}:${sha256(rawValue.trim().toLowerCase())}`;
+}
+
+export async function getClientIp() {
+  const headerStore = await headers();
+
+  const forwardedFor = headerStore.get("x-forwarded-for");
+  const firstForwardedIp = forwardedFor?.split(",")[0]?.trim();
+
+  return (
+    headerStore.get("cf-connecting-ip") ??
+    firstForwardedIp ??
+    headerStore.get("x-real-ip") ??
+    "0.0.0.0"
+  );
 }
 
 export async function verifyTurnstileToken(token: string | null | undefined, remoteIp?: string) {

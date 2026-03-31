@@ -1,13 +1,8 @@
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import { z } from "zod";
-import {
-  assertTrustedOrigin,
-  getClientIp,
-  jsonNoStore,
-  normalizeCookieOptions,
-  verifyTurnstileToken
-} from "@/lib/http-security";
+import { assertTrustedOrigin, jsonNoStore, normalizeCookieOptions } from "@/lib/http-security";
+import { getClientIp, verifyTurnstileToken } from "@/lib/security";
 
 const signupSchema = z.object({
   fullName: z.string().trim().max(80, "Full name is too long.").optional(),

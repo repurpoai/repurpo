@@ -15,3 +15,9 @@ Manual follow-up still recommended
 1. Add a real /.well-known/security.txt once you have a real contact email or security contact URL.
 2. Re-run the scanner after deployment.
 3. If the CSP still complains in production, test the SRI build once on Vercel. If your stack uses any inline third-party script that still violates CSP, switch only the affected routes to nonce-based CSP instead of making the entire app dynamic.
+
+
+Additional build/import fixes:
+- Restored getClientIp helper in lib/security.ts for auth routes.
+- Corrected signup route imports so Turnstile verification and IP lookup come from lib/security.ts.
+- Removed an unused NextResponse import in the login route.
