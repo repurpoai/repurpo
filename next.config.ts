@@ -2,14 +2,12 @@ import type { NextConfig } from "next";
 
 const isDev = process.env.NODE_ENV === "development";
 
-const contentSecurityPolicy = [
+const sharedDirectives = [
   "default-src 'self'",
   "base-uri 'self'",
   "form-action 'self'",
   "frame-ancestors 'none'",
   "object-src 'none'",
-  `script-src 'self' https://challenges.cloudflare.com${isDev ? " 'unsafe-eval'" : ""}`,
-  `script-src-elem 'self' https://challenges.cloudflare.com${isDev ? " 'unsafe-eval'" : ""}`,
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob: https:",
   "font-src 'self' data: https:",
@@ -19,9 +17,23 @@ const contentSecurityPolicy = [
   "worker-src 'self' blob:",
   "manifest-src 'self'",
   "upgrade-insecure-requests"
+];
+
+const strictContentSecurityPolicy = [
+  ...sharedDirectives.slice(0, 5),
+  `script-src 'self' https://challenges.cloudflare.com${isDev ? " 'unsafe-eval'" : ""}`,
+  `script-src-elem 'self' https://challenges.cloudflare.com${isDev ? " 'unsafe-eval'" : ""}`,
+  ...sharedDirectives.slice(5)
 ].join("; ");
 
-const securityHeaders = [
+const authContentSecurityPolicy = [
+  ...sharedDirectives.slice(0, 5),
+  `script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com${isDev ? " 'unsafe-eval'" : ""}`,
+  `script-src-elem 'self' 'unsafe-inline' https://challenges.cloudflare.com${isDev ? " 'unsafe-eval'" : ""}`,
+  ...sharedDirectives.slice(5)
+].join("; ");
+
+const buildSecurityHeaders = (contentSecurityPolicy: string) => [
   {
     key: "Content-Security-Policy",
     value: contentSecurityPolicy.replace(/\s{2,}/g, " ").trim()
@@ -74,8 +86,16 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
+        source: "/login",
+        headers: buildSecurityHeaders(authContentSecurityPolicy)
+      },
+      {
+        source: "/signup",
+        headers: buildSecurityHeaders(authContentSecurityPolicy)
+      },
+      {
         source: "/(.*)",
-        headers: securityHeaders
+        headers: buildSecurityHeaders(strictContentSecurityPolicy)
       }
     ];
   }
