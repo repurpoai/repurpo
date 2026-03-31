@@ -10,6 +10,7 @@ import { TurnstileWidget } from "@/components/turnstile-widget";
 export function LoginForm() {
   const searchParams = useSearchParams();
   const notice = useMemo(() => searchParams.get("notice"), [searchParams]);
+  const queryError = useMemo(() => searchParams.get("error"), [searchParams]);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [captchaToken, setCaptchaToken] = useState("");
@@ -85,6 +86,12 @@ export function LoginForm() {
       {notice ? (
         <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
           {notice}
+        </div>
+      ) : null}
+
+      {queryError && !error ? (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          {queryError}
         </div>
       ) : null}
 

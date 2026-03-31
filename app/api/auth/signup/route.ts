@@ -93,6 +93,7 @@ export async function POST(request: Request) {
       email,
       password,
       options: {
+        emailRedirectTo: new URL("/auth/confirm?next=/dashboard", request.url).toString(),
         data: {
           full_name: fullName ?? null
         }
@@ -131,8 +132,7 @@ export async function POST(request: Request) {
         if (isEmailConfirmationRequired(signInResult.error.message)) {
           return jsonNoStore({
             ok: true,
-            redirectTo: "/login",
-            notice: "Account created. Please confirm your email before logging in."
+            redirectTo: "/check-email"
           });
         }
 
@@ -147,7 +147,7 @@ export async function POST(request: Request) {
       sessionReady = true;
     }
 
-    const response = jsonNoStore({ ok: true, redirectTo: sessionReady ? "/dashboard" : "/login" });
+    const response = jsonNoStore({ ok: true, redirectTo: sessionReady ? "/dashboard" : "/check-email" });
     cookiesToSet.forEach(({ name, value, options }) => {
       response.cookies.set(name, value, normalizeCookieOptions(options));
     });

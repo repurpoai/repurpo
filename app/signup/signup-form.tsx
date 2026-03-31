@@ -27,17 +27,12 @@ export function SignupForm() {
       });
 
       const payload = (await response.json().catch(() => null)) as
-        | { error?: string; redirectTo?: string; notice?: string }
+        | { error?: string; redirectTo?: string }
         | null;
 
       if (!response.ok) {
         setError(payload?.error ?? "Signup failed.");
         setResetSignal((value) => value + 1);
-        return;
-      }
-
-      if (payload?.redirectTo === "/login" && payload.notice) {
-        window.location.assign(`/login?notice=${encodeURIComponent(payload.notice)}`);
         return;
       }
 
