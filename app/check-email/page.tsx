@@ -31,6 +31,9 @@ export default function CheckEmailPage() {
             <p>
               If you do not see the message, check spam or promotions and make sure you opened the newest verification email.
             </p>
+            <p className="text-xs text-slate-500">
+              Admin note: for seamless auto-login after confirmation, the Supabase <strong>Confirm signup</strong> email template should point to <code className="rounded bg-slate-100 px-1 py-0.5">/auth/confirm?token_hash=...&amp;type=email</code> instead of the default confirmation URL.
+            </p>
             <div className="flex flex-wrap gap-3">
               <Link
                 href="/login"
