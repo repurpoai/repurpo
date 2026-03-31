@@ -1,45 +1,21 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
-import {
-  ExternalLink,
-  FileText,
-  History as HistoryIcon,
-  Link2,
-  Megaphone,
-  MessageSquareQuote,
-  Newspaper
-} from "lucide-react";
-import { CopyButton } from "@/components/copy-button";
-import { ExportButton } from "@/components/export-button";
-import { OpenInAppButton } from "@/components/open-in-app-button";
+import { ExternalLink, History as HistoryIcon } from "lucide-react";
 import { Sidebar } from "@/components/sidebar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { PLATFORM_META, TONE_META, type ContentPlatform, type ContentTone, type LengthPreset } from "@/lib/plans";
-import { formatDateTime, getSourceLabel, slugify } from "@/lib/utils";
+import { TONE_META, type ContentTone, type LengthPreset } from "@/lib/plans";
+import { formatDateTime, getSourceLabel } from "@/lib/utils";
 import { getViewerContext } from "@/lib/viewer";
 import { createClient } from "@/lib/supabase/server";
 
-type GenerationRecord = {
+type HistoryListRecord = {
   id: string;
   input_mode: "link" | "text" | "youtube";
   tone: ContentTone;
   length_preset: LengthPreset;
   source_url: string | null;
   source_title: string | null;
-  source_text: string;
-  selected_platforms: ContentPlatform[] | null;
-  outputs: Record<string, string> | null;
-  linkedin_post: string;
-  twitter_thread: string;
-  newsletter: string;
   created_at: string;
-};
-
-const platformIcons: Record<ContentPlatform, React.ComponentType<{ className?: string }>> = {
-  linkedin: Megaphone,
-  x: Link2,
-  instagram: FileText,
-  reddit: MessageSquareQuote,
-  newsletter: Newspaper
 };
 
 export default async function HistoryPage() {
@@ -54,16 +30,14 @@ export default async function HistoryPage() {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("generations")
-    .select(
-      "id, input_mode, tone, length_preset, source_url, source_title, source_text, selected_platforms, outputs, linkedin_post, twitter_thread, newsletter, created_at"
-    )
+    .select("id, input_mode, tone, length_preset, source_url, source_title, created_at")
     .order("created_at", { ascending: false });
 
   if (error) {
     throw new Error(error.message);
   }
 
-  const records = (data ?? []) as GenerationRecord[];
+  const records = (data ?? []) as HistoryListRecord[];
 
   return (
     <main className="min-h-screen bg-slate-100">
@@ -90,7 +64,7 @@ export default async function HistoryPage() {
               </div>
               <CardTitle className="text-3xl text-white">Your saved generations</CardTitle>
               <CardDescription className="text-slate-300">
-                Multi-platform outputs are saved per run.
+                Tap any card to open the full generation.
               </CardDescription>
             </CardHeader>
           </Card>
@@ -128,107 +102,43 @@ export default async function HistoryPage() {
               </CardContent>
             </Card>
           ) : (
-            <div className="space-y-5">
+            <div className="space-y-4">
               {records.map((record) => {
                 const sourceLabel = getSourceLabel(record.source_title, record.source_url);
-                const fileBase = slugify(sourceLabel || "generation");
-
-                const dynamicOutputs =
-                  record.outputs && Object.keys(record.outputs).length > 0
-                    ? (record.outputs as Partial<Record<ContentPlatform, string>>)
-                    : ({
-                        linkedin: record.linkedin_post || undefined,
-                        x: record.twitter_thread || undefined,
-                        newsletter: record.newsletter || undefined
-                      } as Partial<Record<ContentPlatform, string>>);
-
-                const selectedPlatforms =
-                  record.selected_platforms && record.selected_platforms.length > 0
-                    ? record.selected_platforms
-                    : (Object.keys(dynamicOutputs) as ContentPlatform[]);
 
                 return (
-                  <Card key={record.id} className="border-0 bg-white shadow-soft">
-                    <CardHeader className="gap-4">
-                      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                        <div className="space-y-2">
-                          <CardTitle className="text-xl text-slate-950">{sourceLabel}</CardTitle>
-                          <div className="flex flex-wrap items-center gap-2 text-sm text-slate-500">
-                            <span className="rounded-full bg-slate-100 px-3 py-1 capitalize">
-                              {record.input_mode}
-                            </span>
-                            <span className="rounded-full bg-slate-100 px-3 py-1">
-                              {TONE_META[record.tone]?.label ?? record.tone}
-                            </span>
-                            <span className="rounded-full bg-slate-100 px-3 py-1 capitalize">
-                              {record.length_preset}
-                            </span>
-                            <span>{formatDateTime(record.created_at)}</span>
-                          </div>
-                          {record.source_url ? (
-                            <a
-                              href={record.source_url}
-                              target="_blank"
-                              rel="noreferrer noopener"
-                              className="inline-flex items-center gap-1 break-all text-sm font-medium text-slate-700 underline underline-offset-4"
-                            >
-                              {record.source_url}
-                              <ExternalLink className="h-4 w-4 shrink-0" />
-                            </a>
-                          ) : null}
+                  <Link key={record.id} href={`/history/${record.id}`} className="block">
+                    <Card className="border-0 bg-white shadow-soft transition duration-200 hover:-translate-y-0.5 hover:shadow-lg">
+                      <CardHeader className="gap-5">
+                        <CardTitle className="text-2xl leading-tight text-slate-950 sm:text-3xl">
+                          {sourceLabel}
+                        </CardTitle>
+
+                        <div className="flex flex-wrap items-center gap-3 text-sm text-slate-500">
+                          <span className="rounded-full bg-slate-100 px-5 py-2 capitalize">
+                            {record.input_mode}
+                          </span>
+                          <span className="rounded-full bg-slate-100 px-5 py-2">
+                            {TONE_META[record.tone]?.label ?? record.tone}
+                          </span>
+                          <span className="rounded-full bg-slate-100 px-5 py-2 capitalize">
+                            {record.length_preset}
+                          </span>
                         </div>
-                      </div>
-                    </CardHeader>
 
-                    <CardContent className="space-y-6">
-                      {selectedPlatforms.map((platform) => {
-                        const text = dynamicOutputs[platform];
-                        if (!text) return null;
+                        <p className="text-2xl text-slate-400 sm:text-3xl">
+                          {formatDateTime(record.created_at)}
+                        </p>
 
-                        const Icon = platformIcons[platform] ?? FileText;
-
-                        return (
-                          <section key={platform} className="space-y-3">
-                            <div className="flex items-start justify-between gap-4">
-                              <h3 className="flex items-center gap-2 text-base font-semibold text-slate-900">
-                                <Icon className="h-4 w-4" />
-                                {PLATFORM_META[platform].label}
-                              </h3>
-                              <div className="flex flex-wrap items-center gap-2">
-  <CopyButton text={text} label="Copy" />
-  <ExportButton
-    text={text}
-    filename={`${fileBase}-${platform}.txt`}
-    disabled={!viewer.isPaid}
-  />
-  {platform !== "newsletter" ? (
-    <OpenInAppButton
-      platform={platform}
-      text={text}
-      sourceTitle={sourceLabel}
-    />
-  ) : null}
-</div>
-                            </div>
-                            <div className="whitespace-pre-wrap rounded-2xl bg-slate-50 p-4 text-sm leading-7 text-slate-700">
-                              {text}
-                            </div>
-                          </section>
-                        );
-                      })}
-
-                      <details className="rounded-2xl border border-slate-200 bg-white">
-                        <summary className="cursor-pointer list-none px-4 py-3 text-sm font-medium text-slate-900">
-                          View original source text
-                        </summary>
-                        <div className="border-t border-slate-200 px-4 py-4">
-                          <div className="whitespace-pre-wrap text-sm leading-7 text-slate-700">
-                            {record.source_text}
+                        {record.source_url ? (
+                          <div className="flex items-start gap-3 break-all text-xl font-medium text-slate-700 underline underline-offset-4 sm:text-2xl">
+                            <span>{record.source_url}</span>
+                            <ExternalLink className="mt-1 h-7 w-7 shrink-0 text-slate-500" />
                           </div>
-                        </div>
-                      </details>
-                    </CardContent>
-                  </Card>
+                        ) : null}
+                      </CardHeader>
+                    </Card>
+                  </Link>
                 );
               })}
             </div>
