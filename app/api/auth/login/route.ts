@@ -11,10 +11,33 @@ import {
 } from "@/lib/security";
 
 const loginSchema = z.object({
-  email: z.string().trim().email("Enter a valid email address."),
+  email: z.string().trim().email("Enter a valid email address.").transform((value) => value.toLowerCase()),
   password: z.string().min(6, "Password must be at least 6 characters."),
   captchaToken: z.string().trim().min(1, "Complete the security check and try again.")
 });
+
+function getFriendlyLoginError(message?: string | null) {
+  const normalized = message?.toLowerCase() ?? "";
+
+  if (normalized.includes("email not confirmed") || normalized.includes("email_not_confirmed")) {
+    return {
+      status: 403,
+      message: "Please confirm your email first, then log in."
+    } as const;
+  }
+
+  if (normalized.includes("invalid login credentials")) {
+    return {
+      status: 401,
+      message: "Invalid login details."
+    } as const;
+  }
+
+  return {
+    status: 401,
+    message: message || "Login failed."
+  } as const;
+}
 
 export async function POST(request: Request) {
   try {
@@ -98,14 +121,18 @@ export async function POST(request: Request) {
     });
 
     if (error) {
+      const friendly = getFriendlyLoginError(error.message);
+
+      if (friendly.status === 403) {
+        return jsonNoStore({ error: friendly.message }, { status: friendly.status });
+      }
+
       const failure = await recordLoginFailure(email, ip);
-      const status = failure.blocked ? 429 : 401;
+      const status = failure.blocked ? 429 : friendly.status;
 
       return jsonNoStore(
         {
-          error: failure.blocked
-            ? "Too many login attempts. Try again later."
-            : "Invalid login details."
+          error: failure.blocked ? "Too many login attempts. Try again later." : friendly.message
         },
         status === 429
           ? {

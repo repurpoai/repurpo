@@ -36,6 +36,11 @@ export function SignupForm() {
         return;
       }
 
+      if (payload?.redirectTo === "/login" && payload.notice) {
+        window.location.assign(`/login?notice=${encodeURIComponent(payload.notice)}`);
+        return;
+      }
+
       window.location.assign(payload?.redirectTo ?? "/dashboard");
     } catch {
       setError("Signup failed. Try again.");

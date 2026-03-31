@@ -6,10 +6,24 @@ import { getClientIp, verifyTurnstileToken } from "@/lib/security";
 
 const signupSchema = z.object({
   fullName: z.string().trim().max(80, "Full name is too long.").optional(),
-  email: z.string().trim().email("Enter a valid email address."),
+  email: z.string().trim().email("Enter a valid email address.").transform((value) => value.toLowerCase()),
   password: z.string().min(6, "Password must be at least 6 characters."),
   captchaToken: z.string().trim().min(1, "Complete the security check and try again.")
 });
+
+function isEmailConfirmationRequired(message?: string | null) {
+  const normalized = message?.toLowerCase() ?? "";
+  return normalized.includes("email not confirmed") || normalized.includes("email_not_confirmed");
+}
+
+function isInvalidCredentials(message?: string | null) {
+  const normalized = message?.toLowerCase() ?? "";
+  return normalized.includes("invalid login credentials") || normalized.includes("invalid login details");
+}
+
+function wait(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 export async function POST(request: Request) {
   try {
@@ -103,15 +117,37 @@ export async function POST(request: Request) {
       );
     }
 
-    if (!data.session) {
-      const signInResult = await supabase.auth.signInWithPassword({ email, password });
+    let sessionReady = Boolean(data.session);
+
+    if (!sessionReady) {
+      let signInResult = await supabase.auth.signInWithPassword({ email, password });
+
+      if (signInResult.error && isInvalidCredentials(signInResult.error.message)) {
+        await wait(500);
+        signInResult = await supabase.auth.signInWithPassword({ email, password });
+      }
 
       if (signInResult.error) {
-        return jsonNoStore({ ok: true, redirectTo: "/login", notice: "Account created. Log in to continue." });
+        if (isEmailConfirmationRequired(signInResult.error.message)) {
+          return jsonNoStore({
+            ok: true,
+            redirectTo: "/login",
+            notice: "Account created. Please confirm your email before logging in."
+          });
+        }
+
+        return jsonNoStore(
+          {
+            error: signInResult.error.message || "Account created, but automatic login failed."
+          },
+          { status: 400 }
+        );
       }
+
+      sessionReady = true;
     }
 
-    const response = jsonNoStore({ ok: true, redirectTo: "/dashboard" });
+    const response = jsonNoStore({ ok: true, redirectTo: sessionReady ? "/dashboard" : "/login" });
     cookiesToSet.forEach(({ name, value, options }) => {
       response.cookies.set(name, value, normalizeCookieOptions(options));
     });
