@@ -111,6 +111,9 @@ export function LoginForm() {
           "Log in"
         )}
       </Button>
+      <a href="/forgot-password" className="text-sm text-blue-500 hover:underline">
+  Forgot password?
+</a>
     </form>
   );
 }
