@@ -468,12 +468,71 @@ Return JSON in this exact shape:
   `.trim();
 }
 
-async function requestSummary(prompt: string, maxOutputTokens: number) {
+
+const DEFAULT_GEMINI_MODELS = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"];
+
+function getModelCandidates() {
+  const primary = process.env.GEMINI_MODEL?.trim() || DEFAULT_GEMINI_MODELS[0];
+  const fallbackModels = process.env.GEMINI_FALLBACK_MODELS?.split(",")
+    .map((value) => value.trim())
+    .filter(Boolean) ?? [];
+
+  return [...new Set([primary, ...fallbackModels, ...DEFAULT_GEMINI_MODELS])];
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error ?? "");
+}
+
+function isTransientGeminiError(error: unknown) {
+  const message = getErrorMessage(error);
+  const record = error as {
+    status?: unknown;
+    code?: unknown;
+    response?: { status?: unknown };
+  } | null;
+  const status = Number(record?.status ?? record?.response?.status ?? record?.code);
+
+  return (
+    [429, 500, 502, 503, 504].includes(status) ||
+    /high demand|unavailable|resource_exhausted|rate limit|temporarily unavailable|service unavailable|overloaded/i.test(
+      message
+    )
+  );
+}
+
+function shouldTryAnotherModel(error: unknown) {
+  const message = getErrorMessage(error);
+
+  return (
+    isTransientGeminiError(error) ||
+    /malformed JSON|empty response|did not return a usable|invalid JSON|failed validation/i.test(message)
+  );
+}
+
+function getFriendlyGeminiError(error: unknown) {
+  if (isTransientGeminiError(error)) {
+    return "The content engine is busy right now. Please try again in a moment.";
+  }
+
+  const message = getErrorMessage(error).trim();
+  return message || "Something went wrong while generating content.";
+}
+
+async function requestSummary(
+  prompt: string,
+  maxOutputTokens: number,
+  modelName: string,
+  retryMode = false
+) {
   const client = getClient();
-  const model = getModelName();
 
   const response = await client.models.generateContent({
-    model,
+    model: modelName,
     contents: prompt,
     config: {
       responseMimeType: "application/json",
@@ -487,7 +546,7 @@ async function requestSummary(prompt: string, maxOutputTokens: number) {
           }
         }
       },
-      temperature: 0.2,
+      temperature: retryMode ? 0.2 : 0.3,
       maxOutputTokens
     }
   });
@@ -500,6 +559,31 @@ async function requestSummary(prompt: string, maxOutputTokens: number) {
 
   const parsed = parseSummaryJson(rawText);
   return parsed.summary.trim();
+}
+
+async function requestSummaryWithFallback(prompt: string, maxOutputTokens: number) {
+  const models = getModelCandidates();
+  let lastError: unknown = null;
+
+  for (const model of models) {
+    try {
+      return await requestSummary(prompt, maxOutputTokens, model, false);
+    } catch (error) {
+      lastError = error;
+
+      if (shouldTryAnotherModel(error)) {
+        await sleep(350);
+
+        try {
+          return await requestSummary(prompt, maxOutputTokens, model, true);
+        } catch (retryError) {
+          lastError = retryError;
+        }
+      }
+    }
+  }
+
+  throw new Error(getFriendlyGeminiError(lastError));
 }
 
 async function compressLongSource(input: {
@@ -515,7 +599,7 @@ async function compressLongSource(input: {
   const chunkSummaries: string[] = [];
 
   for (const [index, chunkText] of chunks.entries()) {
-    const summary = await requestSummary(
+    const summary = await requestSummaryWithFallback(
       buildChunkSummaryPrompt({
         sourceTitle: input.sourceTitle,
         chunkText,
@@ -531,7 +615,7 @@ async function compressLongSource(input: {
   const mergedSummary =
     chunkSummaries.length === 1
       ? chunkSummaries[0]
-      : await requestSummary(
+      : await requestSummaryWithFallback(
           buildMasterSummaryPrompt({
             sourceTitle: input.sourceTitle,
             chunkSummaries
@@ -565,12 +649,11 @@ async function requestGeneration(input: {
   lengthPreset: LengthPreset;
   platforms: ContentPlatform[];
   retryMode?: boolean;
-}) {
+}, modelName: string) {
   const client = getClient();
-  const model = getModelName();
 
   const response = await client.models.generateContent({
-    model,
+    model: modelName,
     contents: buildPrompt(input),
     config: {
       responseMimeType: "application/json",
@@ -596,8 +679,39 @@ async function requestGeneration(input: {
   return {
     outputs,
     imagePrompt: parsed.imagePrompt.trim(),
-    modelName: model
+    modelName
   };
+}
+
+async function requestGenerationWithFallback(input: {
+  sourceTitle: string;
+  sourceText: string;
+  tone: ContentTone;
+  lengthPreset: LengthPreset;
+  platforms: ContentPlatform[];
+}) {
+  const models = getModelCandidates();
+  let lastError: unknown = null;
+
+  for (const model of models) {
+    try {
+      return await requestGeneration({ ...input, retryMode: false }, model);
+    } catch (error) {
+      lastError = error;
+
+      if (shouldTryAnotherModel(error)) {
+        await sleep(350);
+
+        try {
+          return await requestGeneration({ ...input, retryMode: true }, model);
+        } catch (retryError) {
+          lastError = retryError;
+        }
+      }
+    }
+  }
+
+  throw new Error(getFriendlyGeminiError(lastError));
 }
 
 export async function generateRepurposedContent(input: {
@@ -612,24 +726,8 @@ export async function generateRepurposedContent(input: {
     sourceText: input.sourceText
   });
 
-  try {
-    return await requestGeneration({
-      ...input,
-      sourceText: preparedSourceText
-    });
-  } catch (error) {
-    if (
-      error instanceof Error &&
-      (error.message === "The model returned malformed JSON." ||
-        error.message.startsWith("The model did not return a usable"))
-    ) {
-      return await requestGeneration({
-        ...input,
-        sourceText: preparedSourceText,
-        retryMode: true
-      });
-    }
-
-    throw error;
-  }
+  return await requestGenerationWithFallback({
+    ...input,
+    sourceText: preparedSourceText
+  });
 }
