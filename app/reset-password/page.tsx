@@ -33,7 +33,7 @@ export default function ResetPasswordPage() {
 
   return (
     <PageShell>
-      <SiteHeader links={[{ href: "/", label: "Home" }, { href: "/login", label: "Log in" }, { href: "/signup", label: "Sign up" }]} />
+      <SiteHeader className="mb-6" links={[{ href: "/", label: "Home" }, { href: "/login", label: "Log in" }, { href: "/signup", label: "Sign up" }]} />
 
       <div className="mx-auto flex flex-1 items-center justify-center py-10">
         <Card className="w-full max-w-md border-white/10 bg-white/5 text-slate-50 shadow-soft backdrop-blur">

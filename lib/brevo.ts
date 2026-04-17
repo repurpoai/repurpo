@@ -1,3 +1,4 @@
+
 type BrevoRecipient = {
   email: string;
   name?: string | null;
@@ -10,13 +11,57 @@ type SendEmailInput = {
   text: string;
 };
 
-export async function sendTransactionalEmail(input: SendEmailInput) {
+type SendEmailResult =
+  | { ok: true }
+  | { ok: false; reason: string };
+
+async function readBrevoError(response: Response) {
+  const contentType = response.headers.get("content-type") || "";
+
+  if (contentType.includes("application/json")) {
+    try {
+      const payload = (await response.json()) as {
+        message?: string;
+        code?: string;
+        errors?: Array<{ message?: string }>;
+      };
+
+      return (
+        payload.message ||
+        payload.errors?.[0]?.message ||
+        `Brevo request failed with status ${response.status}.`
+      );
+    } catch {
+      return `Brevo request failed with status ${response.status}.`;
+    }
+  }
+
+  try {
+    const text = (await response.text()).trim();
+    return text || `Brevo request failed with status ${response.status}.`;
+  } catch {
+    return `Brevo request failed with status ${response.status}.`;
+  }
+}
+
+export async function sendTransactionalEmail(input: SendEmailInput): Promise<SendEmailResult> {
   const apiKey = process.env.BREVO_API_KEY?.trim();
   const senderEmail = process.env.BREVO_SENDER_EMAIL?.trim();
   const senderName = process.env.BREVO_SENDER_NAME?.trim() || "Repurpo";
 
-  if (!apiKey || !senderEmail || !input.to.email) {
-    return false;
+  if (!apiKey || !senderEmail) {
+    return {
+      ok: false,
+      reason:
+        "Brevo is not configured. Set BREVO_API_KEY and BREVO_SENDER_EMAIL in your environment."
+    };
+  }
+
+  if (!input.to.email) {
+    return {
+      ok: false,
+      reason: "Recipient email is missing."
+    };
   }
 
   try {
@@ -39,8 +84,15 @@ export async function sendTransactionalEmail(input: SendEmailInput) {
       cache: "no-store"
     });
 
-    return response.ok;
+    if (!response.ok) {
+      return { ok: false, reason: await readBrevoError(response) };
+    }
+
+    return { ok: true };
   } catch {
-    return false;
+    return {
+      ok: false,
+      reason: "Brevo request failed. Check your API key, sender verification, and network access."
+    };
   }
 }

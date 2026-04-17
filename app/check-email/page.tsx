@@ -6,7 +6,7 @@ import { SiteHeader } from "@/components/site-header";
 export default function CheckEmailPage() {
   return (
     <PageShell>
-      <SiteHeader links={[{ href: "/", label: "Home" }, { href: "/login", label: "Log in" }, { href: "/pricing", label: "Pricing" }]} />
+      <SiteHeader className="mb-6" links={[{ href: "/", label: "Home" }, { href: "/login", label: "Log in" }, { href: "/pricing", label: "Pricing" }]} />
 
       <section className="grid flex-1 items-center gap-8 py-12 lg:grid-cols-[1.1fr_0.9fr] lg:gap-12">
         <div className="hidden space-y-5 lg:block">

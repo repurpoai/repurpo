@@ -12,6 +12,7 @@ import {
   Menu,
   Scale,
   Shield,
+  Sparkles,
   User,
   Wallet,
   X
@@ -34,9 +35,10 @@ type SidebarProps = {
   imageMonthlyLimit: number | null;
   imageRemainingThisMonth: number | null;
   usageWindowLabel: string;
+  isAdmin?: boolean;
 };
 
-const navItems = [
+const baseNavItems = [
   {
     href: "/dashboard",
     label: "New Generation",
@@ -87,7 +89,8 @@ export function Sidebar({
   imageUsedThisMonth,
   imageMonthlyLimit,
   imageRemainingThisMonth,
-  usageWindowLabel
+  usageWindowLabel,
+  isAdmin = false
 }: SidebarProps) {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -99,13 +102,25 @@ export function Sidebar({
       ? 0
       : Math.min((imageUsedThisMonth / imageMonthlyLimit) * 100, 100);
 
+  const navItems = isAdmin ? [...baseNavItems, { href: "/admin", label: "Admin", icon: Shield }] : baseNavItems;
+
   const activeLabel = useMemo(
     () => navItems.find((item) => pathname === item.href)?.label ?? "Menu",
-    [pathname]
+    [pathname, navItems]
   );
 
   const sidebarBody = (
     <div className="flex flex-col gap-6">
+      <Link href="/" className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 p-4 transition hover:bg-white/10">
+        <span className="flex h-11 w-11 items-center justify-center rounded-2xl border border-emerald-400/20 bg-emerald-400/10 shadow-lg shadow-emerald-400/5">
+          <Sparkles className="h-5 w-5 text-emerald-300" />
+        </span>
+        <span className="min-w-0 leading-tight">
+          <span className="block text-base font-semibold text-white">Repurpo</span>
+          <span className="block text-xs text-slate-400">AI content repurposer</span>
+        </span>
+      </Link>
+
       <div className="space-y-3">
         <div className="text-xs uppercase tracking-[0.2em] text-slate-400">Profile</div>
         <div className="space-y-1">
@@ -231,31 +246,36 @@ export function Sidebar({
           type="button"
           variant="secondary"
           onClick={() => setMenuOpen(true)}
-          className="w-full justify-between rounded-2xl border border-slate-200 bg-white px-4 py-6 text-left text-slate-950 shadow-soft"
+          className="w-full justify-between rounded-2xl border border-slate-200 bg-white px-4 py-5 text-left text-slate-950 shadow-soft"
         >
           <span className="flex items-center gap-3 text-base font-semibold">
             <Menu className="h-5 w-5" />
             {activeLabel}
           </span>
-          <PlanBadge tier={tier} />
+          <span className="flex items-center gap-2">
+            <PlanBadge tier={tier} />
+          </span>
         </Button>
       </div>
 
       {menuOpen ? (
-        <div className="fixed inset-0 z-50 flex lg:hidden">
+        <div className="fixed inset-0 z-50 lg:hidden">
           <button
             type="button"
             aria-label="Close menu"
-            className="flex-1 bg-slate-950/60 backdrop-blur-sm"
+            className="absolute inset-0 bg-slate-950/70 backdrop-blur-sm"
             onClick={() => setMenuOpen(false)}
           />
-          <div className="w-[min(88vw,22rem)] overflow-y-auto border-l border-white/10 bg-slate-950 p-4 text-slate-50 shadow-2xl">
-            <div className="mb-4 flex items-center justify-between">
-              <div className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-400">Menu</div>
+          <div className="absolute right-0 top-0 h-full w-[min(90vw,24rem)] overflow-y-auto rounded-l-[2rem] border-l border-white/10 bg-slate-950 p-4 text-slate-50 shadow-2xl">
+            <div className="mb-5 flex items-start justify-between gap-4">
+              <div>
+                <div className="text-xs uppercase tracking-[0.2em] text-slate-400">Menu</div>
+                <div className="mt-1 text-lg font-semibold text-white">Navigation</div>
+              </div>
               <button
                 type="button"
                 aria-label="Close menu"
-                className="rounded-full p-2 text-slate-300 transition hover:bg-white/10 hover:text-white"
+                className="rounded-full border border-white/10 bg-white/5 p-2 text-slate-300 transition hover:bg-white/10 hover:text-white"
                 onClick={() => setMenuOpen(false)}
               >
                 <X className="h-5 w-5" />

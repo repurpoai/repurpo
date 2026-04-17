@@ -16,7 +16,7 @@ export default async function LoginPage() {
 
   return (
     <PageShell>
-      <SiteHeader links={[{ href: "/", label: "Home" }, { href: "/pricing", label: "Pricing" }, { href: "/signup", label: "Sign up" }]} />
+      <SiteHeader className="mb-6" links={[{ href: "/", label: "Home" }, { href: "/pricing", label: "Pricing" }, { href: "/signup", label: "Sign up" }]} />
 
       <section className="grid flex-1 items-center gap-8 py-12 lg:grid-cols-[1.1fr_0.9fr] lg:gap-12">
         <div className="hidden space-y-5 lg:block">

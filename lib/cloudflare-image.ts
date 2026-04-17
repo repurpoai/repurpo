@@ -95,7 +95,7 @@ export async function generateImageFromPrompt({
         prompt,
         width,
         height,
-        num_steps: 20,
+        num_steps: 10,
         guidance: 7.5,
         negative_prompt:
           "blurry, distorted, deformed, low quality, extra fingers, extra limbs, watermark, logo, text overlay, UI, screenshot"

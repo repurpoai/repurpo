@@ -56,11 +56,13 @@ export default async function AdminPage({
   const data = await getAdminDashboardData();
   const params = (await searchParams) ?? {};
   const flash = typeof params.flash === "string" ? params.flash : null;
+  const detail = typeof params.detail === "string" ? params.detail : null;
   const flashInfo = flash ? flashMessages[flash] : null;
+  const flashMessage = flashInfo ? (detail ? `${flashInfo.message} ${detail}` : flashInfo.message) : null;
 
   return (
     <PageShell>
-      {flashInfo ? <FlashBanner title={flashInfo.title} message={flashInfo.message} tone={flashInfo.tone} /> : null}
+      {flashInfo ? <FlashBanner title={flashInfo.title} message={flashMessage} tone={flashInfo.tone} /> : null}
       <SiteHeader links={[{ href: "/dashboard", label: "Dashboard" }, { href: "/", label: "Home" }, { href: "/pricing", label: "Pricing" }]} />
 
       <div className="space-y-6 py-6">

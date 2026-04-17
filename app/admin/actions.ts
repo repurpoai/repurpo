@@ -17,8 +17,10 @@ function parseOptionalDatetime(value: FormDataEntryValue | null) {
   return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
 }
 
-function redirectWithFlash(flash: string) {
-  redirect(`/admin?flash=${encodeURIComponent(flash)}`);
+function redirectWithFlash(flash: string, detail?: string) {
+  const query = new URLSearchParams({ flash });
+  if (detail) query.set("detail", detail);
+  redirect(`/admin?${query.toString()}`);
 }
 
 async function resolveUserContact(
@@ -108,7 +110,7 @@ export async function updateUserRoleAction(formData: FormData) {
   });
 
   const contact = await resolveUserContact(supabase, userId, currentUser);
-  const emailSent = await sendTransactionalEmail({
+  const emailResult = await sendTransactionalEmail({
     to: { email: contact.email, name: contact.fullName },
     subject: `Your Repurpo role was updated to ${roleResult.data}`,
     html: `<div style="font-family:Arial,sans-serif;line-height:1.6;color:#111"><p>Hello${contact.fullName ? ` ${contact.fullName}` : ""},</p><p>Your account role was updated to <strong>${roleResult.data}</strong>.</p></div>`,
@@ -116,7 +118,7 @@ export async function updateUserRoleAction(formData: FormData) {
   });
 
   revalidatePath("/admin");
-  redirectWithFlash(emailSent ? "role_updated" : "role_updated_email_failed");
+  redirectWithFlash(emailResult.ok ? "role_updated" : "role_updated_email_failed", emailResult.ok ? undefined : emailResult.reason);
 }
 
 export async function blockUserAction(formData: FormData) {
@@ -166,7 +168,7 @@ export async function blockUserAction(formData: FormData) {
   });
 
   const contact = await resolveUserContact(supabase, userId, currentUser);
-  const emailSent = await sendTransactionalEmail({
+  const emailResult = await sendTransactionalEmail({
     to: { email: contact.email, name: contact.fullName },
     subject: blocked ? "Your Repurpo account was paused" : "Your Repurpo account is active again",
     html: blocked
@@ -178,5 +180,14 @@ export async function blockUserAction(formData: FormData) {
   });
 
   revalidatePath("/admin");
-  redirectWithFlash(blocked ? (emailSent ? "user_blocked_email_sent" : "user_blocked_email_failed") : emailSent ? "user_unblocked_email_sent" : "user_unblocked_email_failed");
+  redirectWithFlash(
+    blocked
+      ? emailResult.ok
+        ? "user_blocked_email_sent"
+        : "user_blocked_email_failed"
+      : emailResult.ok
+        ? "user_unblocked_email_sent"
+        : "user_unblocked_email_failed",
+    emailResult.ok ? undefined : emailResult.reason
+  );
 }
