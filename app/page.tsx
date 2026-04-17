@@ -4,7 +4,6 @@ import {
   ArrowRight,
   CheckCircle2,
   Crown,
-  FileText,
   History,
   Layers3,
   Link2,

@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/admin";
@@ -14,6 +15,31 @@ function parseOptionalDatetime(value: FormDataEntryValue | null) {
   if (typeof value !== "string" || !value.trim()) return null;
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+}
+
+function redirectWithFlash(flash: string) {
+  redirect(`/admin?flash=${encodeURIComponent(flash)}`);
+}
+
+async function resolveUserContact(
+  supabase: ReturnType<typeof createAdminClient>,
+  userId: string,
+  fallback: { email: string | null; full_name: string | null }
+) {
+  let email = fallback.email;
+  let fullName = fallback.full_name;
+
+  if (!email) {
+    try {
+      const { data } = await supabase.auth.admin.getUserById(userId);
+      email = data.user?.email ?? email;
+      fullName = fullName ?? (data.user?.user_metadata?.full_name as string | null | undefined) ?? null;
+    } catch {
+      // ignore and use fallback
+    }
+  }
+
+  return { email: email ?? "", fullName };
 }
 
 export async function updateMaintenanceAction(formData: FormData) {
@@ -46,6 +72,7 @@ export async function updateMaintenanceAction(formData: FormData) {
   });
 
   revalidatePath("/admin");
+  redirectWithFlash("maintenance_saved");
 }
 
 export async function updateUserRoleAction(formData: FormData) {
@@ -80,14 +107,16 @@ export async function updateUserRoleAction(formData: FormData) {
     metadata: { role: roleResult.data }
   });
 
-  await sendTransactionalEmail({
-    to: { email: currentUser.email ?? "", name: currentUser.full_name },
+  const contact = await resolveUserContact(supabase, userId, currentUser);
+  const emailSent = await sendTransactionalEmail({
+    to: { email: contact.email, name: contact.fullName },
     subject: `Your Repurpo role was updated to ${roleResult.data}`,
-    html: `<p>Hello${currentUser.full_name ? ` ${currentUser.full_name}` : ""},</p><p>Your account role was updated to <strong>${roleResult.data}</strong>.</p>`,
+    html: `<div style="font-family:Arial,sans-serif;line-height:1.6;color:#111"><p>Hello${contact.fullName ? ` ${contact.fullName}` : ""},</p><p>Your account role was updated to <strong>${roleResult.data}</strong>.</p></div>`,
     text: `Your Repurpo role was updated to ${roleResult.data}.`
   });
 
   revalidatePath("/admin");
+  redirectWithFlash(emailSent ? "role_updated" : "role_updated_email_failed");
 }
 
 export async function blockUserAction(formData: FormData) {
@@ -136,16 +165,18 @@ export async function blockUserAction(formData: FormData) {
     metadata: { reason: reason || null, blockedUntil }
   });
 
-  await sendTransactionalEmail({
-    to: { email: currentUser.email ?? "", name: currentUser.full_name },
+  const contact = await resolveUserContact(supabase, userId, currentUser);
+  const emailSent = await sendTransactionalEmail({
+    to: { email: contact.email, name: contact.fullName },
     subject: blocked ? "Your Repurpo account was paused" : "Your Repurpo account is active again",
     html: blocked
-      ? `<p>Hello${currentUser.full_name ? ` ${currentUser.full_name}` : ""},</p><p>Your account was paused${reason ? ` for: <strong>${reason}</strong>` : ""}${blockedUntil ? ` until <strong>${new Date(blockedUntil).toLocaleString()}</strong>` : ""}.</p>`
-      : `<p>Hello${currentUser.full_name ? ` ${currentUser.full_name}` : ""},</p><p>Your account has been unblocked.</p>`,
+      ? `<div style="font-family:Arial,sans-serif;line-height:1.6;color:#111"><p>Hello${contact.fullName ? ` ${contact.fullName}` : ""},</p><p>Your account was paused${reason ? ` for: <strong>${reason}</strong>` : ""}${blockedUntil ? ` until <strong>${new Date(blockedUntil).toLocaleString()}</strong>` : ""}.</p><p>If you think this is a mistake, contact support.</p></div>`
+      : `<div style="font-family:Arial,sans-serif;line-height:1.6;color:#111"><p>Hello${contact.fullName ? ` ${contact.fullName}` : ""},</p><p>Your account has been unblocked.</p></div>`,
     text: blocked
       ? `Your Repurpo account was paused.${reason ? ` Reason: ${reason}.` : ""}${blockedUntil ? ` Until: ${new Date(blockedUntil).toLocaleString()}.` : ""}`
       : "Your Repurpo account has been unblocked."
   });
 
   revalidatePath("/admin");
+  redirectWithFlash(blocked ? (emailSent ? "user_blocked_email_sent" : "user_blocked_email_failed") : emailSent ? "user_unblocked_email_sent" : "user_unblocked_email_failed");
 }

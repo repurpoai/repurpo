@@ -1,15 +1,24 @@
 "use client";
 
-import { useState } from "react";
+import { FormEvent, useState } from "react";
+import Link from "next/link";
+import { PageShell } from "@/components/page-shell";
+import { SiteHeader } from "@/components/site-header";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { createClient } from "@/lib/supabase/client";
 
 export default function ResetPasswordPage() {
   const supabase = createClient();
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState("");
+  const [pending, setPending] = useState(false);
 
-  async function handleUpdate(e: React.FormEvent) {
+  async function handleUpdate(e: FormEvent) {
     e.preventDefault();
+    setPending(true);
+    setMessage("");
 
     const { error } = await supabase.auth.updateUser({ password });
 
@@ -18,38 +27,65 @@ export default function ResetPasswordPage() {
     } else {
       setMessage("Password updated successfully! You can now log in.");
     }
+
+    setPending(false);
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 bg-gradient-to-b from-slate-900 to-black text-white">
-      <div className="w-full max-w-md bg-white/5 border border-white/10 rounded-2xl p-6 backdrop-blur">
-        
-        <h1 className="text-2xl font-semibold mb-2">Set new password</h1>
-        <p className="text-sm text-gray-400 mb-6">
-          Choose a strong password to secure your account.
-        </p>
+    <PageShell>
+      <SiteHeader links={[{ href: "/", label: "Home" }, { href: "/login", label: "Log in" }, { href: "/signup", label: "Sign up" }]} />
 
-        <form onSubmit={handleUpdate} className="space-y-4">
-          <input
-            type="password"
-            placeholder="Enter new password"
-            className="w-full p-3 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-400"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-          />
+      <div className="mx-auto flex flex-1 items-center justify-center py-10">
+        <Card className="w-full max-w-md border-white/10 bg-white/5 text-slate-50 shadow-soft backdrop-blur">
+          <CardHeader>
+            <CardTitle className="text-2xl text-white">Set new password</CardTitle>
+            <CardDescription className="text-slate-300">
+              Choose a strong password to secure your account.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleUpdate} className="space-y-4">
+              <div className="space-y-2">
+                <label htmlFor="reset-password" className="text-sm font-medium text-slate-200">
+                  New password
+                </label>
+                <Input
+                  id="reset-password"
+                  type="password"
+                  placeholder="Enter new password"
+                  className="border-white/10 bg-slate-950/70 text-slate-50 placeholder:text-slate-500 focus:border-emerald-400 focus:ring-emerald-500/20"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  disabled={pending}
+                />
+              </div>
 
-          <button className="w-full bg-green-500 hover:bg-green-600 text-black font-semibold p-3 rounded-lg transition">
-            Update Password
-          </button>
-        </form>
+              <Button
+                type="submit"
+                className="w-full bg-emerald-400 text-slate-950 hover:bg-emerald-300 disabled:bg-slate-700 disabled:text-slate-400"
+                disabled={pending}
+              >
+                {pending ? "Updating…" : "Update password"}
+              </Button>
+            </form>
 
-        {message && (
-          <p className="mt-4 text-sm text-center text-gray-300">
-            {message}
-          </p>
-        )}
+            {message ? (
+              <div className="mt-4 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-200">
+                {message}
+              </div>
+            ) : null}
+
+            <p className="mt-4 text-sm text-slate-300">
+              Back to{" "}
+              <Link href="/login" className="font-medium text-emerald-300 underline underline-offset-4 hover:text-emerald-200">
+                login
+              </Link>
+              .
+            </p>
+          </CardContent>
+        </Card>
       </div>
-    </div>
+    </PageShell>
   );
 }

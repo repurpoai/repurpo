@@ -40,6 +40,8 @@ function isPublicPath(pathname: string) {
 function isApiAllowlisted(pathname: string) {
   return (
     pathname === "/api/auth/login" ||
+    pathname === "/api/auth/signup" ||
+    pathname === "/api/auth/confirm" ||
     pathname === "/api/health" ||
     pathname === "/api/dodo/webhook"
   );
@@ -135,8 +137,12 @@ export async function updateSession(request: NextRequest) {
   const isAdminRoute = pathname.startsWith("/admin") || pathname.startsWith("/api/admin");
   const isBlockedRoute = pathname.startsWith("/blocked");
   const isMaintenanceRoute = pathname.startsWith("/maintenance");
+  const isProtectedRoute =
+    pathname.startsWith("/dashboard") || pathname.startsWith("/history") || pathname.startsWith("/profile");
+  const isSensitiveApiRoute =
+    pathname.startsWith("/api/") && !isApiAllowlisted(pathname) && !pathname.startsWith("/api/auth/login");
 
-  if (isBlocked && !isBlockedRoute && pathname !== "/api/auth/login") {
+  if (isBlocked && (isProtectedRoute || isAdminRoute || isSensitiveApiRoute) && !isBlockedRoute) {
     if (isApiRoute) {
       return jsonError(blockReason || "Your account is blocked.", 403);
     }
@@ -178,9 +184,6 @@ export async function updateSession(request: NextRequest) {
     return copyCookies(response, redirectTo(request, "/login", { next: pathname }));
   }
 
-  const isProtectedRoute =
-    pathname.startsWith("/dashboard") || pathname.startsWith("/history") || pathname.startsWith("/profile");
-
   if (!isAuthenticated && isProtectedRoute) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
@@ -188,7 +191,7 @@ export async function updateSession(request: NextRequest) {
     return copyCookies(response, applyPrivateNoStore(NextResponse.redirect(url)));
   }
 
-  if (isAuthenticated && isAuthRoute) {
+  if (isAuthenticated && isAuthRoute && !isBlocked) {
     const url = request.nextUrl.clone();
     url.pathname = "/dashboard";
     return copyCookies(response, applyPrivateNoStore(NextResponse.redirect(url)));

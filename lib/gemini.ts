@@ -104,10 +104,6 @@ const platformInstructions: Record<ContentPlatform, string> = {
     "Newsletter: start with a headline, add a short summary line, then write a concise, readable editorial-style body."
 };
 
-function getModelName() {
-  return process.env.GEMINI_MODEL?.trim() || "gemini-2.5-flash";
-}
-
 function getClient() {
   const apiKey = process.env.GEMINI_API_KEY;
 

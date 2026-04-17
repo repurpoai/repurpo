@@ -67,7 +67,7 @@ export function TurnstileWidget({
       widgetIdRef.current = window.turnstile.render(container, {
         sitekey: siteKey,
         action: stableAction,
-        theme: "light",
+        theme: "dark",
         callback: (nextToken: string) => {
           setToken(nextToken);
           onTokenChange?.(nextToken);
@@ -121,7 +121,7 @@ export function TurnstileWidget({
 
   if (!siteKey) {
     return (
-      <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+      <div className="rounded-xl border border-amber-400/20 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
         Security check is not configured yet. Add <code>NEXT_PUBLIC_TURNSTILE_SITE_KEY</code> first.
       </div>
     );
@@ -141,10 +141,10 @@ export function TurnstileWidget({
           setRenderError("Security check failed to load. Refresh and try again.");
         }}
       />
-      {!scriptReady ? <p className="text-sm text-slate-500">Loading security check…</p> : null}
+      {!scriptReady ? <p className="text-sm text-slate-400">Loading security check…</p> : null}
       <div ref={widgetContainerRef} />
       <input type="hidden" name={name} value={token} readOnly />
-      {renderError ? <p className="text-sm text-red-600">{renderError}</p> : null}
+      {renderError ? <p className="text-sm text-rose-300">{renderError}</p> : null}
     </div>
   );
 }
