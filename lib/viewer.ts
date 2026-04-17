@@ -6,11 +6,17 @@ import {
   normalizeTier,
   type PlanTier
 } from "@/lib/plans";
+import { isBlockActive } from "@/lib/account-status";
 
 export type ViewerContext = {
   userId: string;
   email: string | null;
   userName: string | null;
+  role: "user" | "admin";
+  isAdmin: boolean;
+  isBlocked: boolean;
+  blockReason: string | null;
+  blockedUntil: string | null;
   tier: PlanTier;
   monthlyLimit: number | null;
   usedThisMonth: number;
@@ -34,13 +40,13 @@ export async function getViewerContext(): Promise<ViewerContext | null> {
   const userId = claimsData?.claims?.sub;
   if (!userId) return null;
 
-  const email =
-    typeof claimsData.claims?.email === "string" ? claimsData.claims.email : null;
+  const emailClaim = claimsData?.claims?.email;
+  const email = typeof emailClaim === "string" ? emailClaim : null;
 
   const { data: profile } = await supabase
     .from("profiles")
     .select(
-      "full_name, tier, monthly_generation_limit, billing_status, billing_customer_id, billing_subscription_id, billing_current_period_end"
+      "full_name, role, is_blocked, block_reason, blocked_until, tier, monthly_generation_limit, billing_status, billing_customer_id, billing_subscription_id, billing_current_period_end"
     )
     .eq("id", userId)
     .maybeSingle();
@@ -86,10 +92,18 @@ export async function getViewerContext(): Promise<ViewerContext | null> {
       ? profile.billing_status
       : "inactive";
 
+  const role = profile?.role === "admin" ? "admin" : "user";
+  const isBlocked = isBlockActive(profile?.is_blocked, profile?.blocked_until);
+
   return {
     userId,
     email,
     userName: profile?.full_name ?? null,
+    role,
+    isAdmin: role === "admin",
+    isBlocked,
+    blockReason: typeof profile?.block_reason === "string" ? profile.block_reason : null,
+    blockedUntil: typeof profile?.blocked_until === "string" ? profile.blocked_until : null,
     tier,
     monthlyLimit,
     usedThisMonth,

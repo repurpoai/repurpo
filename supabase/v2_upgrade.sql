@@ -144,3 +144,71 @@ create trigger set_auth_rate_limits_updated_at
 before update on public.auth_rate_limits
 for each row
 execute function public.set_updated_at();
+
+
+alter table public.profiles
+add column if not exists role text not null default 'user';
+
+alter table public.profiles
+add column if not exists is_blocked boolean not null default false;
+
+alter table public.profiles
+add column if not exists block_reason text;
+
+alter table public.profiles
+add column if not exists blocked_until timestamptz;
+
+create or replace function public.prevent_unauthorized_profile_changes()
+returns trigger
+language plpgsql
+as $$
+begin
+  if auth.uid() is not null and auth.uid() = old.id then
+    if new.role is distinct from old.role
+      or new.is_blocked is distinct from old.is_blocked
+      or new.block_reason is distinct from old.block_reason
+      or new.blocked_until is distinct from old.blocked_until
+      or new.tier is distinct from old.tier
+      or new.monthly_generation_limit is distinct from old.monthly_generation_limit
+      or new.billing_status is distinct from old.billing_status
+      or new.billing_customer_id is distinct from old.billing_customer_id
+      or new.billing_subscription_id is distinct from old.billing_subscription_id
+      or new.billing_current_period_end is distinct from old.billing_current_period_end
+    then
+      raise exception 'Unauthorized profile update.';
+    end if;
+  end if;
+
+  return new;
+end;
+$$;
+
+create table if not exists public.user_logs (
+  id uuid primary key default gen_random_uuid(),
+  actor_user_id uuid,
+  target_user_id uuid,
+  action text not null,
+  metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default timezone('utc', now())
+);
+
+create index if not exists user_logs_created_at_idx on public.user_logs (created_at desc);
+
+create table if not exists public.app_settings (
+  id int primary key,
+  maintenance_mode boolean not null default false,
+  maintenance_message text,
+  allow_admin boolean not null default true,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
+insert into public.app_settings (id) values (1)
+on conflict (id) do nothing;
+
+
+drop trigger if exists prevent_unauthorized_profile_changes on public.profiles;
+create trigger prevent_unauthorized_profile_changes
+before update on public.profiles
+for each row
+execute function public.prevent_unauthorized_profile_changes();
