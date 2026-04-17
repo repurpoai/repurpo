@@ -259,14 +259,14 @@ export function Sidebar({
       </div>
 
       {menuOpen ? (
-        <div className="fixed inset-0 z-50 lg:hidden">
+        <div className="fixed inset-0 z-50 flex items-start justify-center p-4 lg:hidden">
           <button
             type="button"
             aria-label="Close menu"
             className="absolute inset-0 bg-slate-950/70 backdrop-blur-sm"
             onClick={() => setMenuOpen(false)}
           />
-          <div className="absolute right-0 top-0 h-full w-[min(90vw,24rem)] overflow-y-auto rounded-l-[2rem] border-l border-white/10 bg-slate-950 p-4 text-slate-50 shadow-2xl">
+          <div className="relative mt-14 w-full max-w-md overflow-y-auto rounded-[2rem] border border-white/10 bg-slate-950 p-4 text-slate-50 shadow-2xl">
             <div className="mb-5 flex items-start justify-between gap-4">
               <div>
                 <div className="text-xs uppercase tracking-[0.2em] text-slate-400">Menu</div>

@@ -465,13 +465,22 @@ Return JSON in this exact shape:
 }
 
 
-const DEFAULT_GEMINI_MODELS = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"];
+const DEFAULT_GEMINI_MODELS = ["gemini-2.5-flash", "gemini-2.0-flash"];
+
+function normalizeModelName(value: string | undefined | null) {
+  const model = value?.trim();
+  if (!model) return null;
+
+  // Keep this small and explicit so unsupported legacy model names do not break generation.
+  const supportedModels = new Set(DEFAULT_GEMINI_MODELS);
+  return supportedModels.has(model) ? model : null;
+}
 
 function getModelCandidates() {
-  const primary = process.env.GEMINI_MODEL?.trim() || DEFAULT_GEMINI_MODELS[0];
+  const primary = normalizeModelName(process.env.GEMINI_MODEL) ?? DEFAULT_GEMINI_MODELS[0];
   const fallbackModels = process.env.GEMINI_FALLBACK_MODELS?.split(",")
-    .map((value) => value.trim())
-    .filter(Boolean) ?? [];
+    .map((value) => normalizeModelName(value))
+    .filter((value): value is string => Boolean(value)) ?? [];
 
   return [...new Set([primary, ...fallbackModels, ...DEFAULT_GEMINI_MODELS])];
 }
