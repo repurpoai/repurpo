@@ -334,66 +334,6 @@ export function DashboardGenerator({
 
       <Card className="border border-white/10 bg-white/5 text-slate-50 shadow-soft backdrop-blur">
         <CardHeader className="gap-3">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-            <div>
-              <CardTitle className="text-white">Plan & usage</CardTitle>
-              <CardDescription className="text-slate-300">Limits are enforced on the server.</CardDescription>
-            </div>
-
-            <div className="rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm text-slate-100">
-              <div className="space-y-2">
-                {usage.monthlyLimit === null ? (
-                  <div className="flex items-center gap-2 font-medium">
-                    <Crown className="h-4 w-4" />
-                    {currentTier === "plus" ? "Plus" : "Pro"} plan • Unlimited text generations
-                  </div>
-                ) : (
-                  <>
-                    <div className="font-medium">
-                      Free plan • {usage.usedThisMonth}/{usage.monthlyLimit} text used in {usage.usageWindowLabel}
-                    </div>
-                    <div className="h-2 w-56 rounded-full bg-slate-200">
-                      <div
-                        className="h-2 rounded-full bg-slate-900 transition-all"
-                        style={{ width: `${usagePercent}%` }}
-                      />
-                    </div>
-                  </>
-                )}
-                <div className="text-xs text-slate-400">
-                  {imageUsage.imageMonthlyLimit === null
-                    ? "Image quota: unlimited"
-                    : `Image quota: ${imageUsage.imageUsedThisMonth}/${imageUsage.imageMonthlyLimit} used`}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {usage.monthlyLimit !== null ? (
-            <div className="rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-4">
-              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                <div className="space-y-1">
-                  <p className="text-sm font-medium text-white">
-                    {usage.remainingThisMonth} generations remaining this month
-                  </p>
-                  <p className="text-sm text-slate-400">
-                    Upgrade to Plus or Pro to unlock all tones and higher image limits.
-                  </p>
-                </div>
-                <a
-                  href={upgradeHref}
-                  className="inline-flex h-11 items-center justify-center rounded-xl bg-slate-950 px-4 text-sm font-medium text-white transition hover:bg-slate-800"
-                >
-                  Upgrade
-                </a>
-              </div>
-            </div>
-          ) : null}
-        </CardHeader>
-      </Card>
-
-      <Card className="border border-white/10 bg-white/5 text-slate-50 shadow-soft backdrop-blur">
-        <CardHeader className="gap-3">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <CardTitle className="text-white">Input mode</CardTitle>
