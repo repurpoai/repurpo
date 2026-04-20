@@ -8,9 +8,8 @@ const contentSecurityPolicy = [
   "form-action 'self'",
   "frame-ancestors 'none'",
   "object-src 'none'",
-  // Next.js App Router still relies on some inline bootstrap/runtime scripts for hydration.
-  // Keeping 'unsafe-inline' here restores client-side interactivity (menu, auth forms, etc.)
-  // while we preserve the rest of the hardening headers.
+  // This build keeps a limited inline-script allowance because the App Router runtime
+  // still needs it here. Move to a nonce-based CSP before removing it.
   `script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com${isDev ? " 'unsafe-eval'" : ""}`,
   `script-src-elem 'self' 'unsafe-inline' https://challenges.cloudflare.com${isDev ? " 'unsafe-eval'" : ""}`,
   "style-src 'self' 'unsafe-inline'",

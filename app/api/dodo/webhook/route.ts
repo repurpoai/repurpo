@@ -38,10 +38,19 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid signature." }, { status: 401 });
   }
 
-  const body = JSON.parse(payload) as {
+  let body: {
     type?: string;
     data?: Record<string, unknown>;
   };
+
+  try {
+    body = JSON.parse(payload) as {
+      type?: string;
+      data?: Record<string, unknown>;
+    };
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON payload." }, { status: 400 });
+  }
 
   const type = typeof body.type === "string" ? body.type : null;
   const data = asRecord(body.data);

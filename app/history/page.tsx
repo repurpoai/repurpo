@@ -3,6 +3,8 @@ import { redirect } from "next/navigation";
 import { ExternalLink, History as HistoryIcon } from "lucide-react";
 import { Sidebar } from "@/components/sidebar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { getViewerContext } from "@/lib/viewer";
+import { createClient } from "@/lib/supabase/server";
 import { TONE_META, type ContentTone, type LengthPreset } from "@/lib/plans";
 import { formatDateTime, getSourceLabel } from "@/lib/utils";
 
@@ -16,8 +18,6 @@ function getCompactSourceUrl(url: string | null) {
     return url;
   }
 }
-import { getViewerContext } from "@/lib/viewer";
-import { createClient } from "@/lib/supabase/server";
 
 type HistoryListRecord = {
   id: string;

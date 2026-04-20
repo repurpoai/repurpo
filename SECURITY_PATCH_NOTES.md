@@ -1,8 +1,8 @@
 Security-focused changes applied
 
 1. Tightened the global security headers in next.config.ts.
-2. Enabled experimental SRI (sha256) to support a stricter CSP without switching the whole app to dynamic rendering.
-3. Removed unsafe-inline from script-src and script-src-elem.
+2. Kept the stricter-CSP migration path documented; removing inline allowances cleanly would require either nonce-based rendering or an experimental SRI rollout.
+3. Kept a limited inline-script allowance in the current Next.js CSP because this build still relies on the App Router runtime. A nonce-based CSP migration is the next step if you want to remove it cleanly.
 4. Added COOP, CORP, X-Permitted-Cross-Domain-Policies, and X-XSS-Protection: 0.
 5. Made login and signup forms explicitly submit via POST so scanners stop treating them as GET forms.
 6. Added same-origin checks on login, signup, checkout, and image-generation POST routes.
