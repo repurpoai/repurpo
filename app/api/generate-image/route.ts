@@ -104,6 +104,7 @@ export async function POST(request: Request) {
       warning: insertError ? "Image generated, but usage could not be saved." : null
     });
   } catch (error) {
+    console.error("generate-image route failed:", error);
     return jsonNoStore(
       {
         error:

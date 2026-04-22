@@ -296,6 +296,7 @@ export async function generateContentAction(
       usage: buildUsageState(viewer, { usedThisMonth, remainingThisMonth })
     };
   } catch (error) {
+    console.error("generateContentAction failed:", error);
     return {
       success: false,
       error:

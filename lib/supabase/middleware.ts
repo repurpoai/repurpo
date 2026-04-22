@@ -47,8 +47,8 @@ function isApiAllowlisted(pathname: string) {
   );
 }
 
-function isMaintenanceAllowed(pathname: string, isAdmin: boolean) {
-  if (isAdmin) return true;
+function isMaintenanceAllowed(pathname: string, isAdmin: boolean, allowAdmin: boolean) {
+  if (allowAdmin && isAdmin) return true;
 
   if (pathname.startsWith("/admin") || pathname.startsWith("/api/admin")) {
     return false;
@@ -106,22 +106,6 @@ export async function updateSession(request: NextRequest) {
   const userId = data?.claims?.sub ?? null;
   const isAuthenticated = Boolean(userId);
 
-  let isAdmin = false;
-  let isBlocked = false;
-  let blockReason: string | null = null;
-
-  if (isAuthenticated) {
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role, is_blocked, block_reason, blocked_until")
-      .eq("id", userId)
-      .maybeSingle();
-
-    isAdmin = profile?.role === "admin";
-    isBlocked = isBlockActive(profile?.is_blocked, profile?.blocked_until);
-    blockReason = typeof profile?.block_reason === "string" ? profile.block_reason : null;
-  }
-
   const appSettings = await getAppSettings();
   const maintenanceActive = Boolean(appSettings.maintenance_mode);
   const maintenanceMessage = appSettings.maintenance_message?.trim() || "We’re temporarily under maintenance.";
@@ -141,6 +125,26 @@ export async function updateSession(request: NextRequest) {
     pathname.startsWith("/dashboard") || pathname.startsWith("/history") || pathname.startsWith("/profile");
   const isSensitiveApiRoute =
     pathname.startsWith("/api/") && !isApiAllowlisted(pathname) && !pathname.startsWith("/api/auth/login");
+
+  let isAdmin = false;
+  let isBlocked = false;
+  let blockReason: string | null = null;
+
+  const needsProfile =
+    isAuthenticated &&
+    (maintenanceActive || isAdminRoute || isProtectedRoute || isSensitiveApiRoute || isAuthRoute);
+
+  if (needsProfile) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role, is_blocked, block_reason, blocked_until")
+      .eq("id", userId)
+      .maybeSingle();
+
+    isAdmin = profile?.role === "admin";
+    isBlocked = isBlockActive(profile?.is_blocked, profile?.blocked_until);
+    blockReason = typeof profile?.block_reason === "string" ? profile.block_reason : null;
+  }
 
   if (isBlocked && (isProtectedRoute || isAdminRoute || isSensitiveApiRoute) && !isBlockedRoute) {
     if (isApiRoute) {
@@ -166,7 +170,7 @@ export async function updateSession(request: NextRequest) {
     return copyCookies(response, redirectTo(request, "/dashboard"));
   }
 
-  if (maintenanceActive && !isAdmin && !isMaintenanceAllowed(pathname, isAdmin)) {
+  if (maintenanceActive && !isMaintenanceAllowed(pathname, isAdmin, appSettings.allow_admin !== false)) {
     if (isApiRoute && !isApiAllowlisted(pathname)) {
       return jsonError(maintenanceMessage, 503);
     }
@@ -174,14 +178,6 @@ export async function updateSession(request: NextRequest) {
     if (!isMaintenanceRoute) {
       return copyCookies(response, redirectTo(request, "/maintenance"));
     }
-  }
-
-  if (!isAuthenticated && isAdminRoute) {
-    if (isApiRoute) {
-      return jsonError("Please log in first.", 401);
-    }
-
-    return copyCookies(response, redirectTo(request, "/login", { next: pathname }));
   }
 
   if (!isAuthenticated && isProtectedRoute) {

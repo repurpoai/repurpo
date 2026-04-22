@@ -9,6 +9,7 @@ import {
   MessageSquareQuote,
   Newspaper
 } from "lucide-react";
+import type { ComponentType } from "react";
 import { CopyButton } from "@/components/copy-button";
 import { ExportButton } from "@/components/export-button";
 import { OpenInAppButton } from "@/components/open-in-app-button";
@@ -35,7 +36,7 @@ type GenerationRecord = {
   created_at: string;
 };
 
-const platformIcons: Record<ContentPlatform, React.ComponentType<{ className?: string }>> = {
+const platformIcons: Record<ContentPlatform, ComponentType<{ className?: string }>> = {
   linkedin: Megaphone,
   x: Link2,
   instagram: FileText,

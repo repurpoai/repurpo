@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import { SiteHeader } from "@/components/site-header";
-import { DashboardContent } from "@/app/dashboard/_components/dashboard-content";
 import { DashboardSkeleton } from "@/app/dashboard/_components/dashboard-skeleton";
+import { DashboardContent } from "@/app/dashboard/_components/dashboard-content";
 
 export default function DashboardPage() {
   return (

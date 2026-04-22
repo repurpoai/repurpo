@@ -3,9 +3,9 @@ import { redirect } from "next/navigation";
 import { ExternalLink, History as HistoryIcon } from "lucide-react";
 import { Sidebar } from "@/components/sidebar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { getViewerContext } from "@/lib/viewer";
-import { createClient } from "@/lib/supabase/server";
 import { TONE_META, type ContentTone, type LengthPreset } from "@/lib/plans";
+import { createClient } from "@/lib/supabase/server";
+import { getViewerContext } from "@/lib/viewer";
 import { formatDateTime, getSourceLabel } from "@/lib/utils";
 
 function getCompactSourceUrl(url: string | null) {
@@ -42,7 +42,8 @@ export default async function HistoryPage() {
   const { data, error } = await supabase
     .from("generations")
     .select("id, input_mode, tone, length_preset, source_url, source_title, created_at")
-    .eq("user_id", viewer.userId).order("created_at", { ascending: false });
+    .eq("user_id", viewer.userId)
+    .order("created_at", { ascending: false });
 
   if (error) {
     throw new Error(error.message);

@@ -1,25 +1,53 @@
-# 💫 About Me:
-I'm a student.<br>Learning new things especially platforms.<br>Always seeking something to learn in surrounding.
+# Repurpo
 
+Repurpo is a Next.js 15 app that turns one source into platform-ready content.
 
-## 🌐 Socials:
-[![Instagram](https://img.shields.io/badge/Instagram-%23E4405F.svg?logo=Instagram&logoColor=white)](https://instagram.com/repurpoai) [![X](https://img.shields.io/badge/X-black.svg?logo=X&logoColor=white)](https://x.com/repurpoai) [![email](https://img.shields.io/badge/Email-D14836?logo=gmail&logoColor=white)](mailto:repurpo.ai@gmail.com) 
+## What it does
 
-# 💻 Tech Stack:
-![TypeScript](https://img.shields.io/badge/typescript-%23007ACC.svg?style=for-the-badge&logo=typescript&logoColor=white) ![MySQL](https://img.shields.io/badge/mysql-4479A1.svg?style=for-the-badge&logo=mysql&logoColor=white) ![CSS3](https://img.shields.io/badge/css3-%231572B6.svg?style=for-the-badge&logo=css3&logoColor=white) ![JavaScript](https://img.shields.io/badge/javascript-%23323330.svg?style=for-the-badge&logo=javascript&logoColor=%23F7DF1E) ![AWS](https://img.shields.io/badge/AWS-%23FF9900.svg?style=for-the-badge&logo=amazon-aws&logoColor=white) ![Google Cloud](https://img.shields.io/badge/GoogleCloud-%234285F4.svg?style=for-the-badge&logo=google-cloud&logoColor=white) ![Firebase](https://img.shields.io/badge/firebase-%23039BE5.svg?style=for-the-badge&logo=firebase) ![Vercel](https://img.shields.io/badge/vercel-%23000000.svg?style=for-the-badge&logo=vercel&logoColor=white) ![Firebase](https://img.shields.io/badge/firebase-a08021?style=for-the-badge&logo=firebase&logoColor=ffcd34) ![MongoDB](https://img.shields.io/badge/MongoDB-%234ea94b.svg?style=for-the-badge&logo=mongodb&logoColor=white) ![Supabase](https://img.shields.io/badge/Supabase-3ECF8E?style=for-the-badge&logo=supabase&logoColor=white) ![Postgres](https://img.shields.io/badge/postgres-%23316192.svg?style=for-the-badge&logo=postgresql&logoColor=white) ![Python](https://img.shields.io/badge/python-3670A0?style=for-the-badge&logo=python&logoColor=ffdd54)
-# 📊 GitHub Stats:
-![](https://github-readme-stats.vercel.app/api?username=repurpoai&theme=dark&hide_border=false&include_all_commits=true&count_private=true)<br/>
-![](https://nirzak-streak-stats.vercel.app/?user=repurpoai&theme=dark&hide_border=false)<br/>
-![](https://github-readme-stats.vercel.app/api/top-langs/?username=repurpoai&theme=dark&hide_border=false&include_all_commits=true&count_private=true&layout=compact)
+- Article URL extraction
+- YouTube transcript input
+- Raw text input
+- Gemini-powered repurposing for LinkedIn, X, Instagram, Reddit, and newsletters
+- Private generation history per user
+- Billing via Dodo Payments
+- Image generation via Cloudflare AI
+- Admin tools for maintenance, roles, and user blocks
 
-### ✍️ Random Dev Quote
-![](https://quotes-github-readme.vercel.app/api?type=horizontal&theme=radical)
+## Core flow
 
----
-[![](https://visitcount.itsvg.in/api?id=repurpoai&icon=0&color=0)](https://visitcount.itsvg.in)
+1. User signs up or logs in with Supabase auth.
+2. The dashboard accepts a link, YouTube URL, or raw text.
+3. Source content is cleaned and normalized.
+4. Gemini generates platform-specific outputs.
+5. The generation is saved to Supabase and shown in history.
+6. Paid plans unlock higher limits and image tools.
 
-  ## 💰 You can help me by Donating
-  [![BuyMeACoffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-ffdd00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/repurpoai) 
+## Required environment variables
 
-  
-<!-- Proudly created with GPRM ( https://gprm.itsvg.in ) -->
+See `.env.example` for the full list. The main ones are:
+
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `GEMINI_API_KEY`
+- `SUPADATA_API_KEY`
+- `SERPAPI_API_KEY`
+- `CLOUDFLARE_ACCOUNT_ID`
+- `CLOUDFLARE_API_TOKEN`
+- `DODO_PAYMENTS_API_KEY`
+- `DODO_PAYMENTS_WEBHOOK_KEY`
+- `NEXT_PUBLIC_TURNSTILE_SITE_KEY`
+- `TURNSTILE_SECRET_KEY`
+
+## Development
+
+```bash
+npm install
+npm run dev
+```
+
+## Notes
+
+- Keep the Google AI Studio key in `GEMINI_API_KEY`.
+- Keep the Dodo webhook secret in `DODO_PAYMENTS_WEBHOOK_KEY`.
+- The app relies on Supabase row-level security for user data isolation.
