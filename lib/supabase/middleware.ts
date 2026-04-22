@@ -12,7 +12,13 @@ type AppMetadata = {
   blocked_until?: string | null;
 };
 
-function readAppMetadata(session: any): AppMetadata {
+type SessionLike = {
+  user?: {
+    app_metadata?: unknown;
+  } | null;
+} | null;
+
+function readAppMetadata(session: SessionLike): AppMetadata {
   return (session?.user?.app_metadata ?? {}) as AppMetadata;
 }
 

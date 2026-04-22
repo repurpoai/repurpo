@@ -4,7 +4,6 @@ import Image from "next/image";
 import { useEffect, useMemo, useRef, useState, type ComponentType, type FormEvent } from "react";
 import {
   CheckCircle2,
-  Crown,
   Download,
   FileImage,
   FileText,
@@ -148,10 +147,6 @@ export function DashboardGenerator({
     return value.split(/\s+/).length;
   }, [text]);
 
-  const usagePercent =
-    usage.monthlyLimit === null
-      ? 0
-      : Math.min((usage.usedThisMonth / usage.monthlyLimit) * 100, 100);
 
   function togglePlatform(platform: ContentPlatform) {
     setSelectedPlatforms((current) =>
