@@ -18,20 +18,20 @@ function readAppMetadata(source: unknown): AppMetadata {
   }
 
   const record = source as Record<string, unknown>;
-  const claims = record.claims as
-    | { app_metadata?: unknown; user_metadata?: unknown }
-    | undefined;
 
+  const claims = record.claims;
   if (claims && typeof claims === "object") {
-    return ((claims.app_metadata ?? claims.user_metadata ?? {}) as AppMetadata) ?? {};
+    const claimsRecord = claims as Record<string, unknown>;
+    return ((claimsRecord.app_metadata ?? claimsRecord.user_metadata ?? {}) as AppMetadata) ?? {};
   }
 
-  const user = record.user as { app_metadata?: unknown } | undefined;
+  const user = record.user;
   if (user && typeof user === "object") {
-    return ((user.app_metadata ?? {}) as AppMetadata) ?? {};
+    const userRecord = user as Record<string, unknown>;
+    return ((userRecord.app_metadata ?? userRecord.user_metadata ?? {}) as AppMetadata) ?? {};
   }
 
-  return {};
+  return ((record.app_metadata ?? record.user_metadata ?? {}) as AppMetadata) ?? {};
 }
 
 function copyCookies(from: NextResponse, to: NextResponse) {
@@ -106,6 +106,7 @@ function jsonError(message: string, status: number) {
 export async function updateSession(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
   const isApiRoute = pathname.startsWith("/api/");
+  const isAdminRoute = pathname.startsWith("/admin") || pathname.startsWith("/api/admin");
 
   let response = NextResponse.next({ request });
 
@@ -140,9 +141,14 @@ export async function updateSession(request: NextRequest) {
   const session = sessionData.session;
   const userId = session?.user?.id ?? claimsData?.claims?.sub ?? null;
   const isAuthenticated = Boolean(userId);
-  const appMetadata = {
-    ...readAppMetadata(session),
-    ...readAppMetadata(claimsData)
+
+  const sessionMetadata = readAppMetadata(session?.user);
+  const claimsMetadata = readAppMetadata(claimsData);
+  const adminRouteMetadata = isAdminRoute ? readAppMetadata((await supabase.auth.getUser()).data.user) : {};
+  const appMetadata: AppMetadata = {
+    ...sessionMetadata,
+    ...claimsMetadata,
+    ...adminRouteMetadata
   };
 
   const isAdmin = appMetadata.is_admin === true || appMetadata.role === "admin";
@@ -161,7 +167,6 @@ export async function updateSession(request: NextRequest) {
     pathname.startsWith("/check-email") ||
     pathname.startsWith("/auth/confirm");
 
-  const isAdminRoute = pathname.startsWith("/admin") || pathname.startsWith("/api/admin");
   const isBlockedRoute = pathname.startsWith("/blocked");
   const isMaintenanceRoute = pathname.startsWith("/maintenance");
   const isProtectedRoute =
