@@ -238,6 +238,34 @@ for each row
 execute function public.sync_profile_flags_to_auth_metadata();
 
 
+-- Backfill existing users so the auth token metadata matches profiles immediately.
+update auth.users u
+set raw_app_meta_data = jsonb_set(
+  jsonb_set(
+    jsonb_set(
+      jsonb_set(
+        coalesce(u.raw_app_meta_data, '{}'::jsonb),
+        '{is_admin}',
+        to_jsonb(coalesce(p.role = 'admin', false)),
+        true
+      ),
+      '{is_blocked}',
+      to_jsonb(coalesce(p.is_blocked, false)),
+      true
+    ),
+    '{role}',
+    to_jsonb(coalesce(p.role, 'user')),
+    true
+  ),
+  '{block_reason}',
+  coalesce(to_jsonb(p.block_reason), 'null'::jsonb),
+  true
+)
+from public.profiles p
+where p.id = u.id;
+
+
+
 
 drop trigger if exists set_generations_updated_at on public.generations;
 create trigger set_generations_updated_at

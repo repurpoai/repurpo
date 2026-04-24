@@ -19,44 +19,41 @@ function readAppMetadata(source: unknown): AppMetadata {
 
   const record = source as Record<string, unknown>;
 
-  const appMetadata = record.app_metadata;
-  if (appMetadata && typeof appMetadata === "object") {
-    return appMetadata as AppMetadata;
-  }
-
   const claims = record.claims;
   if (claims && typeof claims === "object") {
     const claimsRecord = claims as Record<string, unknown>;
-    const claimsAppMetadata = claimsRecord.app_metadata;
-    const claimsUserMetadata = claimsRecord.user_metadata;
-
-    if (claimsAppMetadata && typeof claimsAppMetadata === "object") {
-      return claimsAppMetadata as AppMetadata;
-    }
-
-    if (claimsUserMetadata && typeof claimsUserMetadata === "object") {
-      return claimsUserMetadata as AppMetadata;
-    }
-
-    return {};
+    return ((claimsRecord.app_metadata ?? claimsRecord.user_metadata ?? {}) as AppMetadata) ?? {};
   }
 
   const user = record.user;
   if (user && typeof user === "object") {
     const userRecord = user as Record<string, unknown>;
-    const userAppMetadata = userRecord.app_metadata;
-    const userUserMetadata = userRecord.user_metadata;
-
-    if (userAppMetadata && typeof userAppMetadata === "object") {
-      return userAppMetadata as AppMetadata;
-    }
-
-    if (userUserMetadata && typeof userUserMetadata === "object") {
-      return userUserMetadata as AppMetadata;
-    }
+    return ((userRecord.app_metadata ?? userRecord.user_metadata ?? {}) as AppMetadata) ?? {};
   }
 
-  return {};
+  return ((record.app_metadata ?? record.user_metadata ?? {}) as AppMetadata) ?? {};
+}
+
+async function loadAdminFallbackMetadata(
+  supabase: ReturnType<typeof createServerClient>,
+  userId: string
+): Promise<Pick<AppMetadata, "role" | "is_blocked" | "block_reason" | "blocked_until">> {
+  const { data } = await supabase
+    .from("profiles")
+    .select("role, is_blocked, block_reason, blocked_until")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (!data) {
+    return {};
+  }
+
+  return {
+    role: typeof data.role === "string" ? data.role : undefined,
+    is_blocked: typeof data.is_blocked === "boolean" ? data.is_blocked : undefined,
+    block_reason: typeof data.block_reason === "string" ? data.block_reason : null,
+    blocked_until: typeof data.blocked_until === "string" ? data.blocked_until : null
+  };
 }
 
 function copyCookies(from: NextResponse, to: NextResponse) {
@@ -158,24 +155,26 @@ export async function updateSession(request: NextRequest) {
     }
   );
 
-  const [{ data: userData }, { data: claimsData }] = await Promise.all([
-    supabase.auth.getUser(),
-    supabase.auth.getClaims()
-  ]);
-
-  const authUser = userData.user;
-  const userId = authUser?.id ?? claimsData?.claims?.sub ?? null;
+  const { data: userData } = await supabase.auth.getUser();
+  const user = userData.user;
+  const userId = user?.id ?? null;
   const isAuthenticated = Boolean(userId);
 
-  const sessionMetadata = readAppMetadata(authUser);
+  const claimsData = (await supabase.auth.getClaims()).data;
+  const userMetadata = readAppMetadata(user);
   const claimsMetadata = readAppMetadata(claimsData);
-  const adminRouteMetadata = isAdminRoute ? readAppMetadata(authUser) : {};
-
-  const appMetadata: AppMetadata = {
-    ...sessionMetadata,
-    ...claimsMetadata,
-    ...adminRouteMetadata
+  let appMetadata: AppMetadata = {
+    ...userMetadata,
+    ...claimsMetadata
   };
+
+  if (isAdminRoute && isAuthenticated && appMetadata.is_admin !== true && appMetadata.role !== "admin") {
+    const adminFallback = await loadAdminFallbackMetadata(supabase, userId);
+    appMetadata = {
+      ...appMetadata,
+      ...adminFallback
+    };
+  }
 
   const isAdmin = appMetadata.is_admin === true || appMetadata.role === "admin";
   const isBlocked = isBlockActive(appMetadata.is_blocked, appMetadata.blocked_until);
