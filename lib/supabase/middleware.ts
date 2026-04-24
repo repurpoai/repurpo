@@ -19,19 +19,44 @@ function readAppMetadata(source: unknown): AppMetadata {
 
   const record = source as Record<string, unknown>;
 
+  const appMetadata = record.app_metadata;
+  if (appMetadata && typeof appMetadata === "object") {
+    return appMetadata as AppMetadata;
+  }
+
   const claims = record.claims;
   if (claims && typeof claims === "object") {
     const claimsRecord = claims as Record<string, unknown>;
-    return ((claimsRecord.app_metadata ?? claimsRecord.user_metadata ?? {}) as AppMetadata) ?? {};
+    const claimsAppMetadata = claimsRecord.app_metadata;
+    const claimsUserMetadata = claimsRecord.user_metadata;
+
+    if (claimsAppMetadata && typeof claimsAppMetadata === "object") {
+      return claimsAppMetadata as AppMetadata;
+    }
+
+    if (claimsUserMetadata && typeof claimsUserMetadata === "object") {
+      return claimsUserMetadata as AppMetadata;
+    }
+
+    return {};
   }
 
   const user = record.user;
   if (user && typeof user === "object") {
     const userRecord = user as Record<string, unknown>;
-    return ((userRecord.app_metadata ?? userRecord.user_metadata ?? {}) as AppMetadata) ?? {};
+    const userAppMetadata = userRecord.app_metadata;
+    const userUserMetadata = userRecord.user_metadata;
+
+    if (userAppMetadata && typeof userAppMetadata === "object") {
+      return userAppMetadata as AppMetadata;
+    }
+
+    if (userUserMetadata && typeof userUserMetadata === "object") {
+      return userUserMetadata as AppMetadata;
+    }
   }
 
-  return ((record.app_metadata ?? record.user_metadata ?? {}) as AppMetadata) ?? {};
+  return {};
 }
 
 function copyCookies(from: NextResponse, to: NextResponse) {
@@ -133,18 +158,19 @@ export async function updateSession(request: NextRequest) {
     }
   );
 
-  const [{ data: sessionData }, { data: claimsData }] = await Promise.all([
-    supabase.auth.getSession(),
+  const [{ data: userData }, { data: claimsData }] = await Promise.all([
+    supabase.auth.getUser(),
     supabase.auth.getClaims()
   ]);
 
-  const session = sessionData.session;
-  const userId = session?.user?.id ?? claimsData?.claims?.sub ?? null;
+  const authUser = userData.user;
+  const userId = authUser?.id ?? claimsData?.claims?.sub ?? null;
   const isAuthenticated = Boolean(userId);
 
-  const sessionMetadata = readAppMetadata(session?.user);
+  const sessionMetadata = readAppMetadata(authUser);
   const claimsMetadata = readAppMetadata(claimsData);
-  const adminRouteMetadata = isAdminRoute ? readAppMetadata((await supabase.auth.getUser()).data.user) : {};
+  const adminRouteMetadata = isAdminRoute ? readAppMetadata(authUser) : {};
+
   const appMetadata: AppMetadata = {
     ...sessionMetadata,
     ...claimsMetadata,
