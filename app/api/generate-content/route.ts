@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { NextRequest } from "next/server";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
@@ -16,6 +17,7 @@ import {
 } from "@/lib/plans";
 import { countWords, sanitizeSourceText } from "@/lib/utils";
 import { logActivity } from "@/lib/activity";
+import { acquireGenerationSlot, recordGenerationAttempt, releaseGenerationSlot } from "@/lib/generation-control";
 
 type Body = {
   mode?: "link" | "text" | "youtube";
@@ -44,6 +46,12 @@ function splitForTyping(text: string, wordsPerChunk = 10) {
     chunks.push(words.slice(i, i + wordsPerChunk).join(" ") + (i + wordsPerChunk < words.length ? " " : ""));
   }
   return chunks;
+}
+
+function getRequestIp(request: NextRequest) {
+  const forwardedFor = request.headers.get("x-forwarded-for");
+  const firstForwarded = forwardedFor?.split(",")[0]?.trim();
+  return firstForwarded ?? request.headers.get("x-real-ip") ?? request.headers.get("cf-connecting-ip") ?? null;
 }
 
 export async function POST(request: NextRequest) {
@@ -77,6 +85,21 @@ export async function POST(request: NextRequest) {
     return Response.json(
       { error: "You have reached your monthly Free plan limit. Upgrade to continue generating." },
       { status: 429 }
+    );
+  }
+
+  const requestIp = getRequestIp(request);
+  const rateLimit = await recordGenerationAttempt(viewer.userId, requestIp);
+  if (!rateLimit.allowed) {
+    return Response.json(
+      {
+        error: "You are generating too quickly. Please wait before trying again.",
+        retryAfterSeconds: rateLimit.retryAfterSeconds
+      },
+      {
+        status: 429,
+        headers: rateLimit.retryAfterSeconds ? { "Retry-After": String(rateLimit.retryAfterSeconds) } : undefined
+      }
     );
   }
 
@@ -151,6 +174,17 @@ export async function POST(request: NextRequest) {
     sourceText = text;
     sourceMeta = { kind: "manual" };
   }
+
+  const queueOwnerKey = randomUUID();
+  const slotLease = await acquireGenerationSlot(queueOwnerKey, viewer.userId);
+  if (!slotLease) {
+    return Response.json(
+      { error: "The content engine is busy right now. Please try again in a moment." },
+      { status: 429 }
+    );
+  }
+
+  const releaseLease = "skipped" in slotLease ? null : slotLease;
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -244,6 +278,9 @@ export async function POST(request: NextRequest) {
           error: error instanceof Error ? error.message : "Something went wrong while generating content."
         });
       } finally {
+        if (releaseLease) {
+          await releaseGenerationSlot(releaseLease.slotId, releaseLease.ownerKey);
+        }
         controller.close();
       }
     }

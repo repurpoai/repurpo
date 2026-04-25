@@ -3,6 +3,7 @@ import dns from "node:dns/promises";
 import net from "node:net";
 import { JSDOM } from "jsdom";
 import { countWords, limitCharacters, sanitizeSourceText } from "@/lib/utils";
+import { makeExtractionCacheKey, readExtractionCache, storeExtractionCache } from "@/lib/content-cache";
 
 type ExtractedArticle = {
   url: string;
@@ -176,6 +177,16 @@ function looksBlockedOrJsOnly(html: string) {
 
 export async function extractArticleFromUrl(rawUrl: string): Promise<ExtractedArticle> {
   const url = validateHttpUrl(rawUrl);
+  const cacheKey = makeExtractionCacheKey("article", new URL(url).toString());
+
+  const cached = await readExtractionCache(cacheKey, "article");
+  if (cached) {
+    return {
+      url: cached.url,
+      title: cached.title,
+      text: cached.text
+    };
+  }
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 15000);
@@ -240,6 +251,16 @@ export async function extractArticleFromUrl(rawUrl: string): Promise<ExtractedAr
       "I could not extract enough clean article text from that URL. Try another article or paste the text manually."
     );
   }
+
+  void storeExtractionCache({
+    cacheKey,
+    kind: "article",
+    sourceUrl: response.url,
+    sourceTitle: title,
+    sourceText: text,
+    sourceMeta: { kind: "article" },
+    ttlSeconds: 12 * 60 * 60
+  });
 
   return {
     url: response.url,

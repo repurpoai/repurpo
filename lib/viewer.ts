@@ -89,14 +89,14 @@ export async function getViewerContext(): Promise<ViewerContext | null> {
 
   const generationCountPromise = supabase
     .from("generations")
-    .select("id", { count: "exact", head: true })
+    .select("id", { count: "planned", head: true })
     .eq("user_id", userId)
     .gte("created_at", startIso)
     .lt("created_at", endIso);
 
   const imageCountPromise = supabase
     .from("image_generations")
-    .select("id", { count: "exact", head: true })
+    .select("id", { count: "planned", head: true })
     .eq("user_id", userId)
     .gte("created_at", startIso)
     .lt("created_at", endIso);

@@ -122,6 +122,7 @@ export function DashboardGenerator({
   });
   const [draftReady, setDraftReady] = useState(false);
   const appliedInitialDraft = useRef(false);
+  const lastAutosavePayloadRef = useRef<string>("");
 
   const usage = state.usage ?? {
     tier,
@@ -219,28 +220,42 @@ export function DashboardGenerator({
   useEffect(() => {
     if (typeof window === "undefined" || !draftReady) return;
 
+    const payload = JSON.stringify({
+      inputType: mode,
+      rawContent: mode === "link" ? url : mode === "youtube" ? youtubeUrl : text,
+      settingsJson: {
+        mode,
+        tone,
+        lengthPreset,
+        selectedPlatforms,
+        url,
+        youtubeUrl,
+        text,
+        manualText,
+        imagePrompt,
+        imageAspectRatio
+      }
+    });
+
+    if (payload === lastAutosavePayloadRef.current) {
+      return;
+    }
+
     const timer = window.setTimeout(() => {
+      if (payload === lastAutosavePayloadRef.current) return;
+
       fetch("/api/drafts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          inputType: mode,
-          rawContent: mode === "link" ? url : mode === "youtube" ? youtubeUrl : text,
-          settingsJson: {
-            mode,
-            tone,
-            lengthPreset,
-            selectedPlatforms,
-            url,
-            youtubeUrl,
-            text,
-            manualText,
-            imagePrompt,
-            imageAspectRatio
+        body: payload
+      })
+        .then((response) => {
+          if (response.ok) {
+            lastAutosavePayloadRef.current = payload;
           }
         })
-      }).catch(() => {});
-    }, 700);
+        .catch(() => {});
+    }, 5000);
 
     return () => window.clearTimeout(timer);
   }, [draftReady, imageAspectRatio, imagePrompt, lengthPreset, manualText, mode, selectedPlatforms, text, tone, url, youtubeUrl]);
