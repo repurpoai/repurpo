@@ -72,6 +72,7 @@ export type GenerationFormState = {
     outputs: PlatformOutputs;
     imagePrompt: string;
     selectedPlatforms: ContentPlatform[];
+    platformPreferences?: Partial<Record<ContentPlatform, { tone: ContentTone; lengthPreset: LengthPreset }>>;
   } | null;
   usage: UsageState | null;
 };

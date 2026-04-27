@@ -3,13 +3,11 @@
 import Image from "next/image";
 import { useEffect, useMemo, useRef, useState, type ComponentType, type FormEvent } from "react";
 import {
-  CheckCircle2,
   Download,
   FileImage,
   FileText,
   Link2,
   LoaderCircle,
-  Lock,
   Megaphone,
   MessageSquareQuote,
   Newspaper,
