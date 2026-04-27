@@ -6,7 +6,7 @@ import { getViewerContext } from "@/lib/viewer";
 import { extractArticleFromUrl } from "@/lib/extract-article";
 import { extractYouTubeTranscript } from "@/lib/youtube";
 import { generateRepurposedContent, type PlatformPreference } from "@/lib/gemini";
-import { makeGenerationSourceFingerprint, makePlatformGenerationCacheKey, readPlatformGenerationCache, storePlatformGenerationCache } from "@/lib/content-generation-cache";
+import { makeGenerationSourceFingerprint, makePlatformGenerationCacheKey, readPlatformGenerationCache, storePlatformGenerationCache } from "@/lib/content-cache";
 import {
   canUseTone,
   CONTENT_PLATFORMS,
