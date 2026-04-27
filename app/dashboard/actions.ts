@@ -89,7 +89,7 @@ const urlSchema = z
 const textSchema = z
   .string({ required_error: "Paste some source text first." })
   .transform((value) => sanitizeSourceText(value))
-  .refine((value) => value.length >= 400, {
+  .refine((value) => countWords(value) >= 50, {
     message: "Source text is too short. Paste at least a few solid paragraphs."
   })
   .refine((value) => countWords(value) <= 5000, {
@@ -140,6 +140,16 @@ export async function generateContentAction(
   }
 
   const selectedPlatforms = platformsParse.data;
+
+  // Build per-platform preferences from form data (platform_{key}_tone, platform_{key}_length)
+  const platformPreferences: Partial<Record<ContentPlatform, { tone: ContentTone; lengthPreset: LengthPreset }>> = {};
+  for (const platform of selectedPlatforms) {
+    const rawTone = String(formData.get(`platformPreferences[${platform}][tone]`) ?? "");
+    const rawLength = String(formData.get(`platformPreferences[${platform}][lengthPreset]`) ?? "");
+    const resolvedTone = TONES.includes(rawTone as ContentTone) ? (rawTone as ContentTone) : tone;
+    const resolvedLength = LENGTH_PRESETS.includes(rawLength as LengthPreset) ? (rawLength as LengthPreset) : lengthPreset;
+    platformPreferences[platform] = { tone: resolvedTone, lengthPreset: resolvedLength };
+  }
 
   if (!canUseTone(viewer.tier, tone)) {
     return {
@@ -267,7 +277,8 @@ export async function generateContentAction(
       sourceText,
       tone,
       lengthPreset,
-      platforms: selectedPlatforms
+      platforms: selectedPlatforms,
+      platformPreferences
     });
 
     const supabase = await createClient();
@@ -322,7 +333,8 @@ export async function generateContentAction(
         sourceUrl,
         outputs: generated.outputs,
         imagePrompt: generated.imagePrompt,
-        selectedPlatforms
+        selectedPlatforms,
+        platformPreferences
       },
       usage: buildUsageState(viewer, { usedThisMonth, remainingThisMonth })
     };

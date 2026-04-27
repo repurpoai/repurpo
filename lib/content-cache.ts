@@ -189,7 +189,7 @@ function isMissingTableError(error: unknown) {
 
   return (
     record?.code === "42P01" ||
-    record?.code === "PGRST202" ||
+    record?.code === "PGRST116" ||
     haystack.includes('relation "public.content_extraction_cache" does not exist') ||
     haystack.includes('relation "content_extraction_cache" does not exist') ||
     haystack.includes("could not find the table") ||

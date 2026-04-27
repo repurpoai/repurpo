@@ -120,34 +120,27 @@ function getClient() {
 }
 
 function extractResponseText(response: unknown) {
-  const candidate = response as
-    | {
-        text?: string | (() => string);
-        candidates?: Array<{
-          content?: {
-            parts?: Array<{
-              text?: string;
-            }>;
-          };
-        }>;
-      }
-    | undefined;
+  if (!response || typeof response !== "object") return "";
 
-  if (typeof candidate?.text === "string" && candidate.text.trim()) {
-    return candidate.text;
+  const r = response as {
+    text?: unknown;
+    candidates?: Array<{
+      content?: {
+        parts?: Array<{ text?: string }>;
+      };
+    }>;
+  };
+
+  // @google/genai v1 SDK exposes `.text` as a string getter on the response
+  if (typeof r.text === "string" && r.text.trim()) {
+    return r.text;
   }
 
-  if (typeof candidate?.text === "function") {
-    const value = candidate.text();
-    if (typeof value === "string" && value.trim()) {
-      return value;
-    }
-  }
-
+  // Defensive fallback: walk candidates → content → parts
   const partsText =
-    candidate?.candidates
-      ?.flatMap((item) => item.content?.parts ?? [])
-      .map((part) => part.text ?? "")
+    r.candidates
+      ?.flatMap((c) => c.content?.parts ?? [])
+      .map((p) => p.text ?? "")
       .join("")
       .trim() ?? "";
 

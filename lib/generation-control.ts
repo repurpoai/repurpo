@@ -61,7 +61,7 @@ function isMissingTableError(error: unknown) {
 
   return (
     record?.code === "42P01" ||
-    record?.code === "PGRST202" ||
+    record?.code === "PGRST116" ||
     haystack.includes('relation "public.generation_rate_limits" does not exist') ||
     haystack.includes('relation "public.generation_slots" does not exist') ||
     haystack.includes('relation "generation_rate_limits" does not exist') ||

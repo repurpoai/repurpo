@@ -322,7 +322,7 @@ export async function POST(request: NextRequest) {
   }
 
   const queueOwnerKey = randomUUID();
-  let slotLease: Awaited<ReturnType<typeof acquireGenerationSlot>>;
+  let slotLease: Awaited<ReturnType<typeof acquireGenerationSlot>> = null;
   try {
     slotLease = await acquireGenerationSlot(queueOwnerKey, viewer.userId);
   } catch (error) {
