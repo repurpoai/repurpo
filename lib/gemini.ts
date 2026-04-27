@@ -24,6 +24,11 @@ const summaryResponseSchema = z.object({
 
 export type PlatformOutputs = Partial<Record<ContentPlatform, string>>;
 
+export type PlatformPreference = {
+  tone: ContentTone;
+  lengthPreset: LengthPreset;
+};
+
 const DIRECT_SOURCE_CHARACTER_LIMIT = 18000;
 const DIRECT_SOURCE_WORD_LIMIT = 3200;
 const CHUNK_CHARACTER_TARGET = 7000;
@@ -223,13 +228,18 @@ function buildPrompt(input: {
   tone: ContentTone;
   lengthPreset: LengthPreset;
   platforms: ContentPlatform[];
+  platformPreferences?: Partial<Record<ContentPlatform, PlatformPreference>>;
   retryMode?: boolean;
 }) {
   const requestedPlatformRules = input.platforms
-    .map(
-      (platform) =>
-        `- ${platformInstructions[platform]} Target length for this request: ${lengthTargets[input.lengthPreset][platform]}.`
-    )
+    .map((platform) => {
+      const preference = input.platformPreferences?.[platform] ?? {
+        tone: input.tone,
+        lengthPreset: input.lengthPreset
+      };
+
+      return `- ${platform}: tone ${preference.tone}, length ${preference.lengthPreset}. ${platformInstructions[platform]} Target length for this request: ${lengthTargets[preference.lengthPreset][platform]}.`;
+    })
     .join("\n");
 
   return `
@@ -653,6 +663,7 @@ async function requestGeneration(input: {
   tone: ContentTone;
   lengthPreset: LengthPreset;
   platforms: ContentPlatform[];
+  platformPreferences?: Partial<Record<ContentPlatform, PlatformPreference>>;
   retryMode?: boolean;
 }, modelName: string) {
   const client = getClient();
@@ -694,6 +705,7 @@ async function requestGenerationWithFallback(input: {
   tone: ContentTone;
   lengthPreset: LengthPreset;
   platforms: ContentPlatform[];
+  platformPreferences?: Partial<Record<ContentPlatform, PlatformPreference>>;
 }) {
   const models = getModelCandidates();
   let lastError: unknown = null;
@@ -725,6 +737,7 @@ export async function generateRepurposedContent(input: {
   tone: ContentTone;
   lengthPreset: LengthPreset;
   platforms: ContentPlatform[];
+  platformPreferences?: Partial<Record<ContentPlatform, PlatformPreference>>;
 }) {
   const preparedSourceText = await prepareSourceText({
     sourceTitle: input.sourceTitle,
