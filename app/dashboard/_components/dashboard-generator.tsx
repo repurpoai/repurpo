@@ -484,15 +484,12 @@ export function DashboardGenerator({
         if (done) break;
         buffer += decoder.decode(value, { stream: true });
 
-        let splitIndex = buffer.indexOf("
-
-");
+        let splitIndex = buffer.indexOf("\n\n");
         while (splitIndex !== -1) {
           const block = buffer.slice(0, splitIndex).trim();
           buffer = buffer.slice(splitIndex + 2);
           if (block) {
-            const lines = block.split("
-");
+            const lines = block.split("\n");
             const eventLine = lines.find((line) => line.startsWith("event:"));
             const dataLine = lines.find((line) => line.startsWith("data:"));
             const event = eventLine?.slice(6).trim();
@@ -505,12 +502,9 @@ export function DashboardGenerator({
               }
             }
           }
-          splitIndex = buffer.indexOf("
-
-");
+          splitIndex = buffer.indexOf("\n\n");
         }
       }
-    } catch (error) {
       setState({
         success: false,
         error: error instanceof Error ? error.message : "Generation failed.",
