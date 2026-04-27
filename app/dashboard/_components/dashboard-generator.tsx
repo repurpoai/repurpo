@@ -505,7 +505,7 @@ export function DashboardGenerator({
       }
       setState({
         success: false,
-        error: error instanceof Error ? error.message : "Generation failed.",
+        error: "Generation failed.",
         errorCode: null,
         manualFallback: null,
         data: null,
