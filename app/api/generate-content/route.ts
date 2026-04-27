@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getViewerContext } from "@/lib/viewer";
 import { extractArticleFromUrl } from "@/lib/extract-article";
 import { extractYouTubeTranscript } from "@/lib/youtube";
-import { generateRepurposedContent, type PlatformPreference } from "@/lib/gemini";
+import { generateRepurposedContent } from "@/lib/gemini";
 import { makeGenerationSourceFingerprint, makePlatformGenerationCacheKey, readPlatformGenerationCache, storePlatformGenerationCache } from "@/lib/content-cache";
 import {
   canUseTone,
@@ -19,6 +19,11 @@ import {
 import { countWords, sanitizeSourceText } from "@/lib/utils";
 import { logActivity } from "@/lib/activity";
 import { acquireGenerationSlot, recordGenerationAttempt, releaseGenerationSlot } from "@/lib/generation-control";
+
+type PlatformPreference = {
+  tone: ContentTone;
+  lengthPreset: LengthPreset;
+};
 
 type Body = {
   mode?: "link" | "text" | "youtube";
