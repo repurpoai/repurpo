@@ -185,7 +185,7 @@ export default async function HistoryDetailPage({
                           filename={`${fileBase}-${platform}.txt`}
                           disabled={!viewer.isPaid}
                         />
-                        {platform !== "newsletter" ? (
+                        {platform !== "newsletter" && platform !== "instagram" ? (
                           <OpenInAppButton platform={platform} text={text} sourceTitle={sourceLabel} />
                         ) : null}
                       </div>
