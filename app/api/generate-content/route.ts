@@ -360,6 +360,8 @@ export async function POST(request: NextRequest) {
           ? await generateRepurposedContent({
               sourceTitle,
               sourceText,
+              tone: globalTone,
+              lengthPreset: globalLengthPreset,
               platformPreferences,
               platforms: missingPlatforms
             })
