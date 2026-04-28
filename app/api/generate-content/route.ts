@@ -326,12 +326,12 @@ export async function POST(request: NextRequest) {
   try {
     slotLease = await acquireGenerationSlot(queueOwnerKey, viewer.userId);
   } catch (error) {
-    return Response.json(
-      {
-        error: error instanceof Error ? error.message : "The content engine is unavailable right now. Please try again."
-      },
-      { status: 503 }
-    );
+    // The slot system is supposed to degrade gracefully (Redis primary, DB fallback,
+    // then skip). If both fail for any unexpected reason, log and continue rather
+    // than returning 503 — a missing slot lock is far less harmful than blocking
+    // every generation for every user.
+    console.warn("Generation slot system unavailable, skipping slot tracking:", error);
+    slotLease = { skipped: true };
   }
 
   if (!slotLease) {

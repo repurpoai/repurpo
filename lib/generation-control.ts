@@ -55,19 +55,29 @@ function isMissingTableError(error: unknown) {
     code?: string;
     message?: string;
     details?: string;
+    hint?: string;
   } | null;
 
-  const haystack = `${record?.code ?? ""} ${record?.message ?? ""} ${record?.details ?? ""}`.toLowerCase();
+  const haystack = `${record?.code ?? ""} ${record?.message ?? ""} ${record?.details ?? ""} ${record?.hint ?? ""}`.toLowerCase();
 
   return (
+    // Missing table (PostgreSQL)
     record?.code === "42P01" ||
+    // Missing function (PostgreSQL UNDEFINED_FUNCTION) — returned when the DB RPC
+    // function does not exist (e.g. claim_generation_slot not yet migrated)
+    record?.code === "42883" ||
+    // PostgREST schema-cache miss or function-not-found codes
     record?.code === "PGRST116" ||
+    record?.code === "PGRST202" ||
+    // Message-based fallbacks
     haystack.includes('relation "public.generation_rate_limits" does not exist') ||
     haystack.includes('relation "public.generation_slots" does not exist') ||
     haystack.includes('relation "generation_rate_limits" does not exist') ||
     haystack.includes('relation "generation_slots" does not exist') ||
     haystack.includes("could not find the table") ||
     haystack.includes("could not find the function") ||
+    haystack.includes("no function matches") ||
+    haystack.includes("does not exist") ||
     haystack.includes("schema cache") ||
     haystack.includes("rpc")
   );
