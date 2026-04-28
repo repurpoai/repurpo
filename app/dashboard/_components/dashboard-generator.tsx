@@ -146,6 +146,7 @@ export function DashboardGenerator({
     usageWindowLabel
   });
   const [draftReady, setDraftReady] = useState(false);
+  const [applyFlash, setApplyFlash] = useState<"idle" | "applied" | "none">("idle");
   const appliedInitialDraft = useRef(false);
   const lastAutosavePayloadRef = useRef<string>("");
 
@@ -191,6 +192,11 @@ export function DashboardGenerator({
   }
 
   function applyDefaultStyleToSelectedPlatforms() {
+    if (selectedPlatforms.length === 0) {
+      setApplyFlash("none");
+      setTimeout(() => setApplyFlash("idle"), 2000);
+      return;
+    }
     setPlatformPreferences((current) => {
       const next = { ...current };
       for (const platform of selectedPlatforms) {
@@ -198,6 +204,8 @@ export function DashboardGenerator({
       }
       return next;
     });
+    setApplyFlash("applied");
+    setTimeout(() => setApplyFlash("idle"), 2000);
   }
 
   useEffect(() => {
@@ -710,9 +718,17 @@ export function DashboardGenerator({
                   <h3 className="text-sm font-medium text-white">Platform style</h3>
                   <p className="text-xs text-slate-400">Set tone and length separately for each selected platform.</p>
                 </div>
-                <Button type="button" variant="outline" onClick={applyDefaultStyleToSelectedPlatforms} disabled={pending}>
-                  Apply defaults
-                </Button>
+                <div className="flex items-center gap-3">
+                  {applyFlash === "applied" && (
+                    <span className="text-xs font-medium text-emerald-400">✓ Applied to all platforms</span>
+                  )}
+                  {applyFlash === "none" && (
+                    <span className="text-xs font-medium text-amber-400">Select platforms first</span>
+                  )}
+                  <Button type="button" variant="outline" onClick={applyDefaultStyleToSelectedPlatforms} disabled={pending}>
+                    Apply defaults
+                  </Button>
+                </div>
               </div>
 
               <div className="mt-4 space-y-3">

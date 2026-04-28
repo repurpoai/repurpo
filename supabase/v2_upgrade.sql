@@ -287,7 +287,7 @@ begin
     where gs.id = candidate.id
     returning gs.id, gs.slot_key, gs.locked_until
   )
-  select id, slot_key, locked_until from updated;
+  select updated.id, updated.slot_key, updated.locked_until from updated;
 end;
 $$;
 
