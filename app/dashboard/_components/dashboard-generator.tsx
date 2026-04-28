@@ -401,6 +401,10 @@ export function DashboardGenerator({
         });
       };
 
+      // True once a terminal SSE event (complete or error) has been processed.
+      // Prevents the post-loop fallback setState from overwriting the real outcome.
+      let streamTerminated = false;
+
       const handleEvent = (event: string, payload: Record<string, unknown>) => {
         if (event === "start") {
           setState({
@@ -461,6 +465,7 @@ export function DashboardGenerator({
             },
             usage: usagePayload ?? currentUsage
           });
+          streamTerminated = true;
           setImagePrompt(completeImagePrompt);
           if (usagePayload) {
             setImageUsage({
@@ -474,6 +479,7 @@ export function DashboardGenerator({
         }
 
         if (event === "error") {
+          streamTerminated = true;
           setState({
             success: false,
             error: String(payload.error ?? "Generation failed."),
@@ -511,14 +517,19 @@ export function DashboardGenerator({
           splitIndex = buffer.indexOf("\n\n");
         }
       }
-      setState({
-        success: false,
-        error: "Generation failed.",
-        errorCode: null,
-        manualFallback: null,
-        data: null,
-        usage: currentUsage
-      });
+      // Only fire the fallback error if the stream closed without a terminal
+      // event (complete or error). Without this guard, a proper error from the
+      // server would be immediately overwritten by "Generation failed.".
+      if (!streamTerminated) {
+        setState({
+          success: false,
+          error: "Generation failed.",
+          errorCode: null,
+          manualFallback: null,
+          data: null,
+          usage: currentUsage
+        });
+      }
     } finally {
       setPending(false);
     }
