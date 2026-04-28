@@ -71,13 +71,23 @@ export function makeGenerationSourceFingerprint(input: {
   sourceText: string;
   sourceKind?: string | null;
 }) {
-  const payload = JSON.stringify({
-    kind: input.sourceKind ?? "unknown",
-    url: normalizeSourceUrl(input.sourceUrl),
-    text: input.sourceText.trim()
-  });
+  const normalizedUrl = normalizeSourceUrl(input.sourceUrl);
+  const kind = input.sourceKind ?? "unknown";
 
-  return hash(payload);
+  // URL-based sources should cache by the canonical source identity, not by
+  // extracted text, because page extraction can vary slightly between requests
+  // even when the link is the same. Manual text still uses the text payload.
+  const payload = normalizedUrl
+    ? {
+        kind,
+        url: normalizedUrl
+      }
+    : {
+        kind,
+        text: input.sourceText.trim()
+      };
+
+  return hash(JSON.stringify(payload));
 }
 
 export function makePlatformGenerationCacheKey(input: {
