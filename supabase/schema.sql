@@ -123,6 +123,52 @@ create index if not exists image_generations_user_id_created_at_idx on public.im
 create index if not exists auth_rate_limits_scope_idx on public.auth_rate_limits (scope);
 create index if not exists auth_rate_limits_blocked_until_idx on public.auth_rate_limits (blocked_until);
 
+create table if not exists public.generation_rate_limits (
+  key text primary key,
+  scope text not null check (scope in ('generation_user', 'generation_ip')),
+  attempt_count integer not null default 0,
+  window_started_at timestamptz not null default timezone('utc', now()),
+  last_attempt_at timestamptz not null default timezone('utc', now()),
+  blocked_until timestamptz,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
+create table if not exists public.generation_slots (
+  id integer primary key,
+  slot_key text not null unique,
+  owner_key text,
+  owner_user_id uuid references auth.users (id) on delete set null,
+  locked_until timestamptz,
+  last_acquired_at timestamptz,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
+insert into public.generation_slots (id, slot_key) values
+  (1, 'slot-1'),
+  (2, 'slot-2'),
+  (3, 'slot-3'),
+  (4, 'slot-4')
+on conflict (id) do nothing;
+
+create table if not exists public.content_extraction_cache (
+  cache_key text primary key,
+  source_kind text not null check (source_kind in ('article', 'youtube')),
+  source_url text not null,
+  source_title text not null,
+  source_text text not null,
+  source_meta jsonb not null default '{}'::jsonb,
+  expires_at timestamptz not null,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
+create index if not exists generation_rate_limits_scope_idx on public.generation_rate_limits (scope);
+create index if not exists generation_rate_limits_blocked_until_idx on public.generation_rate_limits (blocked_until);
+create index if not exists generation_slots_locked_until_idx on public.generation_slots (locked_until);
+create index if not exists content_extraction_cache_expires_at_idx on public.content_extraction_cache (expires_at);
+
 create or replace function public.handle_new_user()
 returns trigger
 language plpgsql
@@ -287,6 +333,24 @@ execute function public.set_updated_at();
 drop trigger if exists set_drafts_updated_at on public.drafts;
 create trigger set_drafts_updated_at
 before update on public.drafts
+for each row
+execute function public.set_updated_at();
+
+drop trigger if exists set_generation_rate_limits_updated_at on public.generation_rate_limits;
+create trigger set_generation_rate_limits_updated_at
+before update on public.generation_rate_limits
+for each row
+execute function public.set_updated_at();
+
+drop trigger if exists set_generation_slots_updated_at on public.generation_slots;
+create trigger set_generation_slots_updated_at
+before update on public.generation_slots
+for each row
+execute function public.set_updated_at();
+
+drop trigger if exists set_content_extraction_cache_updated_at on public.content_extraction_cache;
+create trigger set_content_extraction_cache_updated_at
+before update on public.content_extraction_cache
 for each row
 execute function public.set_updated_at();
 

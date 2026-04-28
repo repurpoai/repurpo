@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
@@ -5,11 +6,18 @@ import { generateImageFromPrompt } from "@/lib/cloudflare-image";
 import { assertTrustedOrigin, jsonNoStore } from "@/lib/http-security";
 import { getViewerContext } from "@/lib/viewer";
 import { logActivity } from "@/lib/activity";
+import { acquireGenerationSlot, recordGenerationAttempt, releaseGenerationSlot } from "@/lib/generation-control";
 
 const bodySchema = z.object({
   prompt: z.string().trim().min(1, "Prompt is required."),
   aspectRatio: z.enum(["1:1", "3:4", "4:3", "9:16", "16:9"]).optional()
 });
+
+function getRequestIp(request: Request) {
+  const forwardedFor = request.headers.get("x-forwarded-for");
+  const firstForwarded = forwardedFor?.split(",")[0]?.trim();
+  return firstForwarded ?? request.headers.get("x-real-ip") ?? request.headers.get("cf-connecting-ip") ?? null;
+}
 
 export async function POST(request: Request) {
   const trustedOrigin = assertTrustedOrigin(request);
@@ -56,53 +64,84 @@ export async function POST(request: Request) {
       );
     }
 
-    const result = await generateImageFromPrompt({
-      prompt: parsed.data.prompt,
-      aspectRatio: parsed.data.aspectRatio
-    });
-
-    const supabase = await createClient();
-    const { error: insertError } = await supabase.from("image_generations").insert({
-      user_id: viewer.userId,
-      prompt: parsed.data.prompt,
-      aspect_ratio: parsed.data.aspectRatio ?? "1:1",
-      model_name: result.model
-    });
-
-    if (!insertError) {
-      revalidatePath("/dashboard");
-      revalidatePath("/profile");
-
-      await logActivity({
-        actorUserId: viewer.userId,
-        action: "image_generation_success",
-        metadata: {
-          aspectRatio: parsed.data.aspectRatio ?? "1:1",
-          model: result.model
+    const rateLimit = await recordGenerationAttempt(viewer.userId, getRequestIp(request));
+    if (!rateLimit.allowed) {
+      return jsonNoStore(
+        {
+          error: "You are generating too quickly. Please wait before trying again.",
+          retryAfterSeconds: rateLimit.retryAfterSeconds
+        },
+        {
+          status: 429,
+          headers: rateLimit.retryAfterSeconds ? { "Retry-After": String(rateLimit.retryAfterSeconds) } : undefined
         }
-      });
+      );
     }
 
-    const imageUsedThisMonth = insertError
-      ? viewer.imageUsedThisMonth
-      : viewer.imageUsedThisMonth + 1;
-    const imageRemainingThisMonth =
-      viewer.imageMonthlyLimit === null
-        ? null
-        : Math.max(viewer.imageMonthlyLimit - imageUsedThisMonth, 0);
+    const queueOwnerKey = randomUUID();
+    const slotLease = await acquireGenerationSlot(queueOwnerKey, viewer.userId);
+    if (!slotLease) {
+      return jsonNoStore(
+        { error: "The content engine is busy right now. Please try again in a moment." },
+        { status: 429 }
+      );
+    }
 
-    return jsonNoStore({
-      imageDataUrl: result.dataUrl,
-      model: result.model,
-      usage: {
-        tier: viewer.tier,
-        imageUsedThisMonth,
-        imageMonthlyLimit: viewer.imageMonthlyLimit,
-        imageRemainingThisMonth,
-        usageWindowLabel: viewer.usageWindowLabel
-      },
-      warning: insertError ? "Image generated, but usage could not be saved." : null
-    });
+    const releaseLease = "skipped" in slotLease ? null : slotLease;
+
+    try {
+      const result = await generateImageFromPrompt({
+        prompt: parsed.data.prompt,
+        aspectRatio: parsed.data.aspectRatio
+      });
+
+      const supabase = await createClient();
+      const { error: insertError } = await supabase.from("image_generations").insert({
+        user_id: viewer.userId,
+        prompt: parsed.data.prompt,
+        aspect_ratio: parsed.data.aspectRatio ?? "1:1",
+        model_name: result.model
+      });
+
+      if (!insertError) {
+        revalidatePath("/dashboard");
+        revalidatePath("/profile");
+
+        await logActivity({
+          actorUserId: viewer.userId,
+          action: "image_generation_success",
+          metadata: {
+            aspectRatio: parsed.data.aspectRatio ?? "1:1",
+            model: result.model
+          }
+        });
+      }
+
+      const imageUsedThisMonth = insertError
+        ? viewer.imageUsedThisMonth
+        : viewer.imageUsedThisMonth + 1;
+      const imageRemainingThisMonth =
+        viewer.imageMonthlyLimit === null
+          ? null
+          : Math.max(viewer.imageMonthlyLimit - imageUsedThisMonth, 0);
+
+      return jsonNoStore({
+        imageDataUrl: result.dataUrl,
+        model: result.model,
+        usage: {
+          tier: viewer.tier,
+          imageUsedThisMonth,
+          imageMonthlyLimit: viewer.imageMonthlyLimit,
+          imageRemainingThisMonth,
+          usageWindowLabel: viewer.usageWindowLabel
+        },
+        warning: insertError ? "Image generated, but usage could not be saved." : null
+      });
+    } finally {
+      if (releaseLease) {
+        await releaseGenerationSlot(releaseLease.slotId, releaseLease.ownerKey);
+      }
+    }
   } catch (error) {
     console.error("generate-image route failed:", error);
     return jsonNoStore(

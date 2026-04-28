@@ -89,7 +89,7 @@ export async function getAdminDashboardData(options?: {
       .select("maintenance_mode, maintenance_message, allow_admin")
       .eq("id", 1)
       .maybeSingle(),
-    admin.from("profiles").select("id", { count: "exact", head: true })
+    admin.from("profiles").select("id", { count: "planned", head: true })
   ]);
 
   const profiles = (profilesRaw ?? []) as AdminProfileRow[];

@@ -21,8 +21,6 @@ function getOpenUrl(platform: ContentPlatform, text: string, sourceTitle?: strin
       return `https://x.com/intent/post?text=${encodedText}`;
     case "linkedin":
       return "https://www.linkedin.com/feed/";
-    case "instagram":
-      return "https://www.instagram.com/";
     case "reddit":
       return `https://www.reddit.com/submit?selftext=true&title=${encodedTitle}&text=${encodedText}`;
     default:
@@ -36,8 +34,6 @@ function getButtonLabel(platform: ContentPlatform) {
       return "Open in X";
     case "linkedin":
       return "Open in LinkedIn";
-    case "instagram":
-      return "Open in Instagram";
     case "reddit":
       return "Open in Reddit";
     default:
@@ -64,7 +60,7 @@ export function OpenInAppButton({
 
   const openUrl = getOpenUrl(platform, text, sourceTitle);
 
-  if (!openUrl) {
+  if (!openUrl || platform === "instagram" || platform === "newsletter") {
     return null;
   }
 

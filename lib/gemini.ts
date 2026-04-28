@@ -24,6 +24,11 @@ const summaryResponseSchema = z.object({
 
 export type PlatformOutputs = Partial<Record<ContentPlatform, string>>;
 
+export type PlatformPreference = {
+  tone: ContentTone;
+  lengthPreset: LengthPreset;
+};
+
 const DIRECT_SOURCE_CHARACTER_LIMIT = 18000;
 const DIRECT_SOURCE_WORD_LIMIT = 3200;
 const CHUNK_CHARACTER_TARGET = 7000;
@@ -115,34 +120,27 @@ function getClient() {
 }
 
 function extractResponseText(response: unknown) {
-  const candidate = response as
-    | {
-        text?: string | (() => string);
-        candidates?: Array<{
-          content?: {
-            parts?: Array<{
-              text?: string;
-            }>;
-          };
-        }>;
-      }
-    | undefined;
+  if (!response || typeof response !== "object") return "";
 
-  if (typeof candidate?.text === "string" && candidate.text.trim()) {
-    return candidate.text;
+  const r = response as {
+    text?: unknown;
+    candidates?: Array<{
+      content?: {
+        parts?: Array<{ text?: string }>;
+      };
+    }>;
+  };
+
+  // @google/genai v1 SDK exposes `.text` as a string getter on the response
+  if (typeof r.text === "string" && r.text.trim()) {
+    return r.text;
   }
 
-  if (typeof candidate?.text === "function") {
-    const value = candidate.text();
-    if (typeof value === "string" && value.trim()) {
-      return value;
-    }
-  }
-
+  // Defensive fallback: walk candidates → content → parts
   const partsText =
-    candidate?.candidates
-      ?.flatMap((item) => item.content?.parts ?? [])
-      .map((part) => part.text ?? "")
+    r.candidates
+      ?.flatMap((c) => c.content?.parts ?? [])
+      .map((p) => p.text ?? "")
       .join("")
       .trim() ?? "";
 
@@ -223,13 +221,18 @@ function buildPrompt(input: {
   tone: ContentTone;
   lengthPreset: LengthPreset;
   platforms: ContentPlatform[];
+  platformPreferences?: Partial<Record<ContentPlatform, PlatformPreference>>;
   retryMode?: boolean;
 }) {
   const requestedPlatformRules = input.platforms
-    .map(
-      (platform) =>
-        `- ${platformInstructions[platform]} Target length for this request: ${lengthTargets[input.lengthPreset][platform]}.`
-    )
+    .map((platform) => {
+      const preference = input.platformPreferences?.[platform] ?? {
+        tone: input.tone,
+        lengthPreset: input.lengthPreset
+      };
+
+      return `- ${platform}: tone ${preference.tone}, length ${preference.lengthPreset}. ${platformInstructions[platform]} Target length for this request: ${lengthTargets[preference.lengthPreset][platform]}.`;
+    })
     .join("\n");
 
   return `
@@ -653,6 +656,7 @@ async function requestGeneration(input: {
   tone: ContentTone;
   lengthPreset: LengthPreset;
   platforms: ContentPlatform[];
+  platformPreferences?: Partial<Record<ContentPlatform, PlatformPreference>>;
   retryMode?: boolean;
 }, modelName: string) {
   const client = getClient();
@@ -694,6 +698,7 @@ async function requestGenerationWithFallback(input: {
   tone: ContentTone;
   lengthPreset: LengthPreset;
   platforms: ContentPlatform[];
+  platformPreferences?: Partial<Record<ContentPlatform, PlatformPreference>>;
 }) {
   const models = getModelCandidates();
   let lastError: unknown = null;
@@ -725,6 +730,7 @@ export async function generateRepurposedContent(input: {
   tone: ContentTone;
   lengthPreset: LengthPreset;
   platforms: ContentPlatform[];
+  platformPreferences?: Partial<Record<ContentPlatform, PlatformPreference>>;
 }) {
   const preparedSourceText = await prepareSourceText({
     sourceTitle: input.sourceTitle,

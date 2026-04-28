@@ -15,7 +15,35 @@ import { ExportButton } from "@/components/export-button";
 import { OpenInAppButton } from "@/components/open-in-app-button";
 import { Sidebar } from "@/components/sidebar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { PLATFORM_META, TONE_META, type ContentPlatform, type ContentTone, type LengthPreset } from "@/lib/plans";
+import { PLATFORM_META, TONE_META, LENGTH_META, type ContentPlatform, type ContentTone, type LengthPreset } from "@/lib/plans";
+
+// ---------------------------------------------------------------------------
+// Per-platform preferences helpers
+// ---------------------------------------------------------------------------
+
+type PlatformPref = { tone: ContentTone; lengthPreset: LengthPreset };
+
+const VALID_TONES: ContentTone[] = ["professional", "casual", "viral", "authority"];
+const VALID_LENGTHS: LengthPreset[] = ["short", "medium", "long"];
+
+function parsePlatformPreferences(
+  sourceMeta: Record<string, unknown> | null
+): Partial<Record<ContentPlatform, PlatformPref>> {
+  const raw = sourceMeta?.platformPreferences;
+  if (!raw || typeof raw !== "object") return {};
+
+  const result: Partial<Record<ContentPlatform, PlatformPref>> = {};
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (!value || typeof value !== "object") continue;
+    const rec = value as Partial<PlatformPref>;
+    const tone = VALID_TONES.includes(rec.tone as ContentTone) ? (rec.tone as ContentTone) : null;
+    const length = VALID_LENGTHS.includes(rec.lengthPreset as LengthPreset) ? (rec.lengthPreset as LengthPreset) : null;
+    if (tone && length) {
+      result[key as ContentPlatform] = { tone, lengthPreset: length };
+    }
+  }
+  return result;
+}
 import { formatDateTime, getSourceLabel, slugify } from "@/lib/utils";
 import { getViewerContext } from "@/lib/viewer";
 import { createClient } from "@/lib/supabase/server";
@@ -28,6 +56,7 @@ type GenerationRecord = {
   source_url: string | null;
   source_title: string | null;
   source_text: string;
+  source_meta: Record<string, unknown> | null;
   selected_platforms: ContentPlatform[] | null;
   outputs: Record<string, string> | null;
   linkedin_post: string;
@@ -60,7 +89,7 @@ export default async function HistoryDetailPage({
   const { data, error } = await supabase
     .from("generations")
     .select(
-      "id, input_mode, tone, length_preset, source_url, source_title, source_text, selected_platforms, outputs, linkedin_post, twitter_thread, newsletter, created_at"
+      "id, input_mode, tone, length_preset, source_url, source_title, source_text, source_meta, selected_platforms, outputs, linkedin_post, twitter_thread, newsletter, created_at"
     )
     .eq("id", id)
     .eq("user_id", viewer.userId)
@@ -77,6 +106,8 @@ export default async function HistoryDetailPage({
   const record = data as GenerationRecord;
   const sourceLabel = getSourceLabel(record.source_title, record.source_url);
   const fileBase = slugify(sourceLabel || "generation");
+
+  const platformPreferences = parsePlatformPreferences(record.source_meta);
 
   const dynamicOutputs =
     record.outputs && Object.keys(record.outputs).length > 0
@@ -165,6 +196,9 @@ export default async function HistoryDetailPage({
               if (!text) return null;
 
               const Icon = platformIcons[platform] ?? FileText;
+              const prefs = platformPreferences[platform];
+              const displayTone = prefs?.tone ?? record.tone;
+              const displayLength = prefs?.lengthPreset ?? record.length_preset;
 
               return (
                 <Card key={platform} className="border-0 bg-white shadow-soft">
@@ -176,6 +210,9 @@ export default async function HistoryDetailPage({
                           {PLATFORM_META[platform].label}
                         </CardTitle>
                         <CardDescription>{PLATFORM_META[platform].description}</CardDescription>
+                        <CardDescription className="text-slate-400">
+                          {TONE_META[displayTone]?.label ?? displayTone} • {LENGTH_META[displayLength]?.label ?? displayLength}
+                        </CardDescription>
                       </div>
 
                       <div className="flex flex-wrap items-center gap-2">
@@ -185,7 +222,7 @@ export default async function HistoryDetailPage({
                           filename={`${fileBase}-${platform}.txt`}
                           disabled={!viewer.isPaid}
                         />
-                        {platform !== "newsletter" ? (
+                        {platform !== "newsletter" && platform !== "instagram" ? (
                           <OpenInAppButton platform={platform} text={text} sourceTitle={sourceLabel} />
                         ) : null}
                       </div>

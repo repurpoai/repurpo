@@ -1,5 +1,6 @@
 import { fetchTranscript } from "youtube-transcript";
 import { countWords, limitCharacters, sanitizeSourceText } from "@/lib/utils";
+import { makeExtractionCacheKey, readExtractionCache, storeExtractionCache } from "@/lib/content-cache";
 
 type YouTubeExtraction = {
   url: string;
@@ -393,6 +394,22 @@ async function fetchTranscriptWithFallbacks(videoId: string, url: string) {
 
 export async function extractYouTubeTranscript(rawUrl: string): Promise<YouTubeExtraction> {
   const parsed = parseYouTubeUrl(rawUrl);
+  const cacheKey = makeExtractionCacheKey("youtube", parsed.videoId);
+
+  const cached = await readExtractionCache(cacheKey, "youtube");
+  if (cached) {
+    return {
+      url: cached.url,
+      title: cached.title,
+      text: cached.text,
+      sourceMeta: {
+        kind: "youtube",
+        videoId: parsed.videoId,
+        channelName:
+          typeof cached.sourceMeta.channelName === "string" ? cached.sourceMeta.channelName : null
+      }
+    };
+  }
 
   let transcriptText = "";
 
@@ -413,6 +430,20 @@ export async function extractYouTubeTranscript(rawUrl: string): Promise<YouTubeE
   }
 
   const oembed = await getYouTubeOembed(parsed.url);
+
+  void storeExtractionCache({
+    cacheKey,
+    kind: "youtube",
+    sourceUrl: parsed.url,
+    sourceTitle: oembed.title || "YouTube video",
+    sourceText: transcriptText,
+    sourceMeta: {
+      kind: "youtube",
+      videoId: parsed.videoId,
+      channelName: oembed.author_name
+    },
+    ttlSeconds: 24 * 60 * 60
+  });
 
   return {
     url: parsed.url,

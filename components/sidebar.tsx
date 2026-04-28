@@ -102,14 +102,15 @@ export function Sidebar({
       ? 0
       : Math.min((imageUsedThisMonth / imageMonthlyLimit) * 100, 100);
 
-  const navItems = useMemo(() => {
-    if (!isAdmin) return baseNavItems;
-    return [...baseNavItems, { href: "/admin", label: "Admin", icon: Shield }];
-  }, [isAdmin]);
+  const navItems = useMemo(
+    () => (isAdmin ? [...baseNavItems, { href: "/admin", label: "Admin", icon: Shield }] : baseNavItems),
+    [isAdmin]
+  );
 
-  const activeLabel = useMemo(() => {
-    return navItems.find((item) => pathname === item.href)?.label ?? "Menu";
-  }, [pathname, navItems]);
+  const activeLabel = useMemo(
+    () => navItems.find((item) => pathname === item.href)?.label ?? "Menu",
+    [pathname, navItems]
+  );
 
   const sidebarBody = (
     <div className="flex flex-col gap-6">

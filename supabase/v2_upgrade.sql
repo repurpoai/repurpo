@@ -214,7 +214,101 @@ for each row
 execute function public.prevent_unauthorized_profile_changes();
 
 
+-- Generation control tables used for request throttling and concurrency control
+create table if not exists public.generation_rate_limits (
+  key text primary key,
+  scope text not null check (scope in ('generation_user', 'generation_ip')),
+  attempt_count integer not null default 0,
+  window_started_at timestamptz not null default timezone('utc', now()),
+  last_attempt_at timestamptz not null default timezone('utc', now()),
+  blocked_until timestamptz,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
+create index if not exists generation_rate_limits_scope_idx on public.generation_rate_limits (scope);
+create index if not exists generation_rate_limits_blocked_until_idx on public.generation_rate_limits (blocked_until);
+
+drop trigger if exists set_generation_rate_limits_updated_at on public.generation_rate_limits;
+create trigger set_generation_rate_limits_updated_at
+before update on public.generation_rate_limits
+for each row
+execute function public.set_updated_at();
+
+create table if not exists public.generation_slots (
+  id integer primary key,
+  slot_key text not null unique,
+  owner_key text,
+  owner_user_id uuid references auth.users (id) on delete set null,
+  locked_until timestamptz,
+  last_acquired_at timestamptz,
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now())
+);
+
+insert into public.generation_slots (id, slot_key) values
+  (1, 'slot-1'),
+  (2, 'slot-2'),
+  (3, 'slot-3'),
+  (4, 'slot-4')
+on conflict (id) do nothing;
+
+create index if not exists generation_slots_locked_until_idx on public.generation_slots (locked_until);
+
+drop trigger if exists set_generation_slots_updated_at on public.generation_slots;
+create trigger set_generation_slots_updated_at
+before update on public.generation_slots
+for each row
+execute function public.set_updated_at();
+
+create or replace function public.claim_generation_slot(p_owner_key text, p_owner_user_id uuid, p_lock_seconds integer default 180)
+returns table(slot_id integer, slot_key text, locked_until timestamptz)
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  return query
+  with candidate as (
+    select gs.id
+    from public.generation_slots gs
+    where gs.locked_until is null or gs.locked_until < timezone('utc', now())
+    order by gs.locked_until nulls first, gs.id
+    for update skip locked
+    limit 1
+  ), updated as (
+    update public.generation_slots gs
+    set owner_key = p_owner_key,
+        owner_user_id = p_owner_user_id,
+        locked_until = timezone('utc', now()) + make_interval(secs => greatest(p_lock_seconds, 60)),
+        last_acquired_at = timezone('utc', now()),
+        updated_at = timezone('utc', now())
+    from candidate
+    where gs.id = candidate.id
+    returning gs.id, gs.slot_key, gs.locked_until
+  )
+  select id, slot_key, locked_until from updated;
+end;
+$$;
+
+create or replace function public.release_generation_slot(p_slot_id integer, p_owner_key text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  update public.generation_slots
+  set owner_key = null,
+      owner_user_id = null,
+      locked_until = null,
+      updated_at = timezone('utc', now())
+  where id = p_slot_id and owner_key = p_owner_key;
+end;
+$$;
+
 -- Draft autosave table used by the dashboard
+
 create table if not exists public.drafts (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users (id) on delete cascade unique,

@@ -49,6 +49,11 @@ export type ViewerContext = {
   latestDraft: ViewerDraft | null;
 };
 
+function normalizeInputType(value: unknown): "link" | "text" | "youtube" {
+  if (value === "link" || value === "youtube") return value;
+  return "text";
+}
+
 function readAppMetadata(claimsData: unknown): JwtAppMetadata {
   const claims = claimsData as {
     claims?: {
@@ -89,14 +94,14 @@ export async function getViewerContext(): Promise<ViewerContext | null> {
 
   const generationCountPromise = supabase
     .from("generations")
-    .select("id", { count: "exact", head: true })
+    .select("id", { count: "planned", head: true })
     .eq("user_id", userId)
     .gte("created_at", startIso)
     .lt("created_at", endIso);
 
   const imageCountPromise = supabase
     .from("image_generations")
-    .select("id", { count: "exact", head: true })
+    .select("id", { count: "planned", head: true })
     .eq("user_id", userId)
     .gte("created_at", startIso)
     .lt("created_at", endIso);
@@ -155,7 +160,7 @@ export async function getViewerContext(): Promise<ViewerContext | null> {
     isPro: tier === "pro",
     latestDraft: latestDraftRow
       ? {
-          inputType: latestDraftRow.input_type,
+          inputType: normalizeInputType(latestDraftRow.input_type),
           rawContent: latestDraftRow.raw_content,
           settingsJson: (latestDraftRow.settings_json as Record<string, unknown>) ?? {},
           updatedAt: latestDraftRow.updated_at
