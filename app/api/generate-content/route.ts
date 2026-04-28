@@ -175,8 +175,8 @@ export async function POST(request: NextRequest) {
     }
   } else {
     const text = sanitizeSourceText(String(body.text ?? ""));
-    if (countWords(text) < 400) {
-      return Response.json({ error: "Paste more source text." }, { status: 400 });
+    if (countWords(text) < 50) {
+      return Response.json({ error: "Source text is too short. Paste at least a few solid paragraphs." }, { status: 400 });
     }
 
     sourceTitle = "Manual text input";

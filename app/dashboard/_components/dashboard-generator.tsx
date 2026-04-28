@@ -839,38 +839,42 @@ export function DashboardGenerator({
             </CardHeader>
           </Card>
 
-          {state.data.selectedPlatforms.map((platform) => {
-            const textValue = state.data?.outputs[platform];
-            if (!textValue) return null;
-            const prefs = state.data?.platformPreferences?.[platform] ?? DEFAULT_PLATFORM_STYLE;
-            const Icon = platformIcons[platform];
+          {(() => {
+            const data = state.data;
+            if (!data) return null;
+            return data.selectedPlatforms.map((platform) => {
+              const textValue = data.outputs[platform];
+              if (!textValue) return null;
+              const prefs = data.platformPreferences?.[platform] ?? DEFAULT_PLATFORM_STYLE;
+              const Icon = platformIcons[platform];
 
-            return (
-              <Card key={platform} className="border border-white/10 bg-white/5 text-slate-50 shadow-soft backdrop-blur">
-                <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                  <div className="space-y-1">
-                    <CardTitle className="flex items-center gap-2 text-white">
-                      <Icon className="h-5 w-5" />
-                      {PLATFORM_META[platform].label}
-                    </CardTitle>
-                    <CardDescription className="text-slate-300">{PLATFORM_META[platform].description}</CardDescription>
-                    <CardDescription className="text-slate-400">{TONE_META[prefs.tone].label} • {LENGTH_META[prefs.lengthPreset].label}</CardDescription>
-                  </div>
+              return (
+                <Card key={platform} className="border border-white/10 bg-white/5 text-slate-50 shadow-soft backdrop-blur">
+                  <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="space-y-1">
+                      <CardTitle className="flex items-center gap-2 text-white">
+                        <Icon className="h-5 w-5" />
+                        {PLATFORM_META[platform].label}
+                      </CardTitle>
+                      <CardDescription className="text-slate-300">{PLATFORM_META[platform].description}</CardDescription>
+                      <CardDescription className="text-slate-400">{TONE_META[prefs.tone].label} • {LENGTH_META[prefs.lengthPreset].label}</CardDescription>
+                    </div>
 
-                  <div className="flex flex-wrap items-center gap-2">
-                    <CopyButton text={textValue} label="Copy" />
-                    <ExportButton text={textValue} filename={`${platform}.txt`} disabled={!imageUnlocked} />
-                    {platform !== "newsletter" && platform !== "instagram" ? (
-                      <OpenInAppButton platform={platform} text={textValue} sourceTitle={state.data.sourceTitle} imageUrl={imageUrl} />
-                    ) : null}
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="whitespace-pre-wrap text-sm leading-7 text-slate-300">{textValue}</div>
-                </CardContent>
-              </Card>
-            );
-          })}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <CopyButton text={textValue} label="Copy" />
+                      <ExportButton text={textValue} filename={`${platform}.txt`} disabled={!imageUnlocked} />
+                      {platform !== "newsletter" && platform !== "instagram" ? (
+                        <OpenInAppButton platform={platform} text={textValue} sourceTitle={data.sourceTitle} imageUrl={imageUrl} />
+                      ) : null}
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="whitespace-pre-wrap text-sm leading-7 text-slate-300">{textValue}</div>
+                  </CardContent>
+                </Card>
+              );
+            });
+          })()}
 
           <Card className="border border-white/10 bg-white/5 text-slate-50 shadow-soft backdrop-blur">
             <CardHeader className="flex flex-row items-start justify-between gap-4">
