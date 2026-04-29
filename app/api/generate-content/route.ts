@@ -122,6 +122,12 @@ export async function POST(request: NextRequest) {
   let sourceUrl: string | null = null;
   let sourceText = "";
   let sourceMeta: Record<string, unknown> = {};
+  // fingerprintUrl is the URL used for cache key computation. We use the
+  // INPUT url typed by the user (not response.url after redirects) because
+  // response.url can vary between requests — servers may add/remove trailing
+  // slashes or change redirect targets — causing fingerprint drift and breaking
+  // cache hits for users who entered the same URL.
+  let fingerprintUrl: string | null = null;
 
   const manualText = sanitizeSourceText(String(body.manualText ?? ""));
 
@@ -141,6 +147,7 @@ export async function POST(request: NextRequest) {
       sourceUrl = article.url;
       sourceText = article.text;
       sourceMeta = { kind: "article" };
+      fingerprintUrl = url;
     } catch (error) {
       return Response.json(
         {
@@ -163,6 +170,7 @@ export async function POST(request: NextRequest) {
       sourceUrl = video.url;
       sourceText = video.text;
       sourceMeta = video.sourceMeta;
+      fingerprintUrl = url;
     } catch (error) {
       return Response.json(
         {
@@ -185,7 +193,8 @@ export async function POST(request: NextRequest) {
   }
 
   const sourceFingerprint = makeGenerationSourceFingerprint({
-    sourceUrl,
+    // For URL-based sources use the stable INPUT url; for text use the text itself.
+    sourceUrl: fingerprintUrl ?? sourceUrl,
     sourceText,
     sourceKind: String(sourceMeta.kind ?? mode)
   });

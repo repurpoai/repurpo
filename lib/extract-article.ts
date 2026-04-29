@@ -259,7 +259,7 @@ export async function extractArticleFromUrl(rawUrl: string): Promise<ExtractedAr
     sourceTitle: title,
     sourceText: text,
     sourceMeta: { kind: "article" },
-    ttlSeconds: 12 * 60 * 60
+    ttlSeconds: 60 * 60 * 24 * 30 // 30 days — matches generation cache TTL so fingerprints stay stable
   });
 
   return {

@@ -442,7 +442,7 @@ export async function extractYouTubeTranscript(rawUrl: string): Promise<YouTubeE
       videoId: parsed.videoId,
       channelName: oembed.author_name
     },
-    ttlSeconds: 24 * 60 * 60
+    ttlSeconds: 60 * 60 * 24 * 30 // 30 days — matches generation cache TTL so fingerprints stay stable
   });
 
   return {

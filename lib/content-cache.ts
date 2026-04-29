@@ -49,8 +49,18 @@ function normalizeSourceUrl(value: string | null | undefined) {
 
   try {
     const url = new URL(trimmed);
+    // Strip fragment — it never affects content
     url.hash = "";
-    return url.toString();
+    // Strip trailing slash from non-root paths so that
+    // "https://example.com/page" and "https://example.com/page/"
+    // produce the same fingerprint. Root "/" is kept as-is.
+    if (url.pathname.length > 1 && url.pathname.endsWith("/")) {
+      url.pathname = url.pathname.slice(0, -1);
+    }
+    // Lowercase the entire URL. scheme and hostname are already lowercased
+    // by the URL constructor; lowercasing the path handles the rare case of
+    // uppercase path segments (e.g. "Article" vs "article").
+    return url.toString().toLowerCase();
   } catch {
     return trimmed.toLowerCase();
   }
